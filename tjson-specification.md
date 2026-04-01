@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.2.0
+# Text Json (TJSON) Specification v0.3.0
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -22,7 +22,7 @@ We should usually have a pretty good idea of where we are in the data structure 
 
 Rigidly spaced outputs can sometimes help not only the viewing experience, but the editing experience as well.  Some subtle mistakes are best avoided by making them unlikely to parse.  In TJSON, the very position on the screen of the start of the text carries meaning.  Tolerating small variations in those spaces is not helpful to anyone, as doing so both degrades the visual experience by depriving it of meaningful demarcations, and makes mistakes more likely to carry hidden and erroneous meaning.
 
-The parser must be able to parse all valid TJSON to json that represents the exact same data that the original json represented without any options on the TJSON parser, no matter what readability preferences were used with the generator to create TJSON from the original JSON.  However, duplicate keys are not preserved by most JSON parsers in the wild, and are beyond the round-trip data fidelity guarantees that we try to enforce.  It doesn't mean that implementations should not try to preserve duplicate keys, but they can be valid TJSON implementations even if they do not.  If the platform preserves duplicate keys, the TJSON implementation should too, but is not required to do so.
+The parser must be able to parse all valid TJSON to json that represents the exact same data that the original json represented without any options on the TJSON parser, no matter what readability preferences were used with the generator to create TJSON from the original JSON.  Valid numeric representations in the original JSON must be preserved when translating to TJSON, and vice versa.  Exponent 'e+' vs just 'e' need not be distinguished as the meaning is identical and the look is nearly so.  Duplicate keys are not preserved by most JSON parsers in the wild, and are beyond the round-trip data fidelity guarantees that we try to enforce.  It doesn't mean that implementations should not try to preserve duplicate keys, but they can be valid TJSON implementations even if they do not.  If the platform preserves duplicate keys, the TJSON implementation should too, but is not required to do so.
 
 Though a more text like presentation is less forward about type information, it should be possible for the user to see the data as much as possible, and with a bit of knowledge, to be able to discern the type.  Spaces at the end of lines are invisible to the user.  Also, part of our round trip path might flow through text editors that tend not to be happy about spaces at the ends of lines.  As such, spaces at the end of lines in the output, though not forbidden, are never necessary for proper parsing, and are avoided wherever possible.
 
@@ -56,7 +56,9 @@ I expect there are also going to be other use cases I can't foresee right now, a
 
 4) Making changes in the specification of the format to make code run more efficiently, or to make it fit some theoretical computer science grammar category.  This is for humans first, and computers are fast, it's ok if the code has to work a little harder to make it readable.  We do try to keep the code as fast as possible given the human first constraint, and we have a Rust implementation, so the performance is there.
 
-5) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
+5) Specifying folding rules to stay within pathologically small fixed width values, or for where n is almost the same as width (an indent glyph is provided to avoid n getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accomodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
+
+6) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
 
 ---
 
@@ -225,13 +227,74 @@ String (alternate): space anything newline
  string
 ```
 
+### Folding
+
+Folding isn't required, but it can be necessary where width is at a premium on a device.  In order to avoid pathological cases that are not meaningfully textlike, we will not even attempt to break things into fold chunks that are fewer than 10 visible characters wide in order to preserve a fixed width, or attempt to honor a width of less than 20.  We do sometimes make fold chunks smaller than 10 characters, but it's to make it look good, not to match a fixed width.  In many cases, our folding rules will not have a valid way to fold for lengths that are that short.  An example would be where do you fold false?  How about "\u10FFFF"?  It's possible to come up with rules for these things, but at that point we aren't really in the target area of this specification.  If you are doing that, it's not text anymore.
+
+If the user picks a reasonable width, but the object is very deep, the way to handle that is to either overflow the width or use indent glyphs.  The solution is not such madness as attempting to fold false.
+
+Fold indicators must be both preceded and followed by at least one data character.  Otherwise, infinite intermediate fold markers would be allowed in the middle of any string.  This does not prohibit empty rows in tables, as a pipe in a table context counts as a data character for the purposes of this rule.  A colon immediately after an object key counts as a data character for the purposes of this rule.  Neither an object key colon nor a table pipe counts as a data character generally.
+
 ### Number Folding
 
 Number folding follows the same rules as string folding below, including the requirement that the fold must be between the first and last data character.  Numbers are unlikely to need folding as most of them are not long, but it is possible so it is specified here.  Implementations should usually do something else before they get close enough to the margin to have to fold a number, such as use an indent glyph (described later) or just overflow the set width, but folding a number is allowed.  Generators should try to avoid folding numbers, especially right after the initial sign as it's more likely to be confusing to the user.  Numeric folding is not the default.
 
+### Object Key Folding
+
+Object key folding follows the same rules as string folding below (a bare object key being treated like a bare key, and a double quoted object key being treated like a double quoted string).  There is however, one additional caveat.
+
+In the special case of a key value pair where the value is a basic type (true, false, null, string, number, empty array [], or empty object {}), the key and the value are folded as a single unit, with the fold marker allowed in two additional spots at the junction between the key and the following basic value: immediately after the intermediate ':' (preferred by default), or immediately before the intermediate ':' (ugly, avoid, but allowed).  The opening glyph of a multiline string can be treated as a basic value in this context.  Part of a folded object key is FORBIDDEN from being on the same line as any other value.
+
+In order to create the visual impression that both the object key and the basic value that follow are a single unit we have a special indent rule for the intermediate state between the key and the value.  Even though we are as a special rule allowing folding adjacent to the ':', which might otherwise be considered at a lower indent level than the interior of the key or the interior of the following value, we treat folds adjacent to the ':' as occurring at the same n level as the interior of the object key, or the interior of the basic value in order to preserve visual consistency.
+
+Another way of saying the same thing is that at the start of the object key increment n+2, and at the end we decrement n-2, and at the start of the basic value we increment n+2, and at the end of the basic value we decrement n-2, but logically the n-2 from the end of the object key and the n+2 from the beginning of the basic value are merged, and thus the intermediate n value can never show up in a fold or an indent.  This is important for both readability and avoiding parse ambiguity.
+
+
+**Example: Separates key and value, but uses an additional line**
+```
+  justthewronglengthkey:
+  /  This is a string directly on the object key
+```
+
+**Example: Separates key and value, but uses an additional line**
+```
+  justthewronglength
+  / key:
+  /  This is a string
+  /  directly on the
+  /  object key
+```
+
+**Example: Keeps key and value together on a line, may look worse, but may require fewer lines which is why a generator would choose it**
+```
+  justthewronglength
+  / key: This is a
+  /  string directly
+  /  on the object key
+```
+
+**Example: Keeps key and value together on a line, may look worse, but may require fewer lines which is why a generator would choose it**
+```
+  justthewronglengthkey: This is
+  /  a string directly on the
+  /  object key
+```
+
+**Forbidden Example: (should not parse) (n is allowed to return to n-2 adjacent to the ':' before finishing the key basic value pair)**
+```
+  justthewronglengthkey:
+   This is a string
+```
+
+**Forbidden Example: (should not parse) (n is allowed to return to n-2 adjacent to the ':' before finishing the key basic value pair)**
+```
+  justthewronglengthkey
+/ : This is a string
+```
+
 ### String Folding
 
-All string folding, json string or bare string MUST be between the first and last data character.  In both the json string `"abcd"` and the identical bare string, ` abcd` the first and last data character are the "a" and the "d" respectively.  In the json string `"\ \ \ "` the first data character is the first space, and the last data character is the last space including its escape backslash immediately before.
+All string folding, json string, bare string or bare key MUST be between the first and last data character.  In both the json string `"abcd"` and the identical bare string, ` abcd` the first and last data character are the "a" and the "d" respectively.  In the json string `"\ \ \ "` the first data character is the first space, and the last data character is the last space including its escape backslash immediately before.
 
 FOLDING IN THE MIDDLE OF A DATA CHARACTER OR IN THE MIDDLE OF A VISIBLE CHARACTER IS ALWAYS FORBIDDEN IN EVERY CONTEXT (in this case `"\ "` is a single data character, and anything displayed together is also a single visible character, like an emoji for instance).  We could (but probably should avoid) folding in the middle of the escape sequence for an emoji smiley face 😀 `\uD83D\uDE00` by folding before the escaped `\uDE00`, but we couldn't fold in the middle of those two literal characters if they weren't escaped as the user would no longer see a smiley face when reading the TJSON.
 
@@ -253,6 +316,13 @@ FOLDING a JSON string in general should be BEFORE unescaped space runs rather th
  this is a really really really
 /  long text here bare string
 /  sentence with words
+```
+
+**Example: bare key fold (words with spaces)**
+```
+  this is a really really long
+  / bare key: start bare string
+  / same bare string
 ```
 
 **Example: JSON string fold**
@@ -705,11 +775,11 @@ Anything else as a key name is just like json `"keyname"` with the same rules
 
 Two separate width settings:
 
-- wrap/pack width (default 80) — controls line wrapping and maximum packing width for objects, arrays, inline values etc.  If something doesn't pack, it gets its own line, even if it's longer than the pack/wrap width.
+- wrap/pack width (default 80, clamped to minimum 20) — controls line wrapping and maximum packing width for objects, arrays, inline values etc.  If something doesn't pack, it gets its own line, even if it's longer than the pack/wrap width.
   - Rationale:  It doesn't make sense to pack or wrap everything - sometimes it's just better to let it be longer than the width setting, particularly if it's incomprehensible gibberish anyway as it will make your editor (not the TJSON) fold it onto the very beginning of the next line in your text editor, making it take up more horizontal space, meaning it will take up less vertical space and it will be over quicker.  Alternately, your text editor may just cut it off after the width, which is ok too as it's gibberish anyway.  Also, indent levels might get beyond your wrap/pack width in some samples, in which case it's going to go past the wrap/pack width, and that's ok.  We can't make every bit of data perfectly human readable all the time.  Implementors are free to make decisions they think are reasonable regarding when and whether to enforce the wrap/pack width when producing TJSON.
-- table column max width (default 40) — controls the maximum width any column is padded to. Independent of pack width so that pack width can be set to infinity (pack more stuff onto the same line forever) while still keeping table columns sane, or vice versa.
+- Table column max width (default 40) — controls the maximum width any column is padded to. Independent of pack width so that pack width can be set to infinity (pack more stuff onto the same line forever) while still keeping table columns sane, or vice versa.
 - Do not pack within tables!  This is not allowed (both because it would be hard to read, and because we don't allow any of the things that we might pack (nonempty arrays or nonempty objects) within tables at all).  Use the normal format instead if you need to do that.  Wrapping strings within tables is strongly discouraged, implementors SHOULD not do that, but it is allowed.
-- Don't both pack and wrap on the same line unless you have a very good and particular reason!  It's forbidden in tables to pack, but even in other places, both packing and wrapping on the same line is almost certainly going to look horrible.  Implementations SHOULD not both pack and wrap on the same line - they should pick one or the other for that line, or neither.  Going past our pack/wrap width is sometimes acceptable
+- Don't both pack and wrap on the same line unless you have a very good and particular reason!  It's forbidden in tables to pack, but even in other places, both packing and wrapping on the same line is almost certainly going to look horrible.  Implementations SHOULD not both pack and wrap on the same line - they should pick one or the other for that line, or neither.  Going past our pack/wrap width is sometimes acceptable but should be avoided if possible.
 
 ### Array and Object Disambiguation
 
@@ -908,10 +978,9 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
     o3: o3value
 ```
 
-**Example: multiline string and inline packing**
+**Example: multiline string and inline packing (width = 40 (default is 80), multiline folding is off (the default), we are preferring commas for packing arrays over spaces (the default), string folding auto (the default))**
 ```
-  a:5
-  6: fred
+  a:5  6: fred
   obj:
     o1:8
     o2:
@@ -928,15 +997,28 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
         n+1, sort of like a bare string ` but a bare string can't be a ` so the user knows it's not a bare string, it's the end of the multiline.
         The last character of this multiline string is not an EOL it is an exclamation point!
        `
-       ary3
-       ary4
+       ary3   ary4
+      // ary3 and ary4 are packed with each other, they are both siblings of ary1 and the multiline
+    // here o3stringvalue is a basic value on o3, not an element of an array, so it must start on the same line
     o3: o3stringvalue
-    o4:   arraystring1,  arraystring2,  arraystring3, 18,  arraystring4
+    // Note that we can't fit everything onto the line with o4:, so we start on the next line.  This is a rendering choice but I think it usually looks the best.
+    o4:
+       arraystring1,  arraystring2,
+       arraystring3, 18,  arraystring4
+    // here we can fit everything on the same line with o5, without running into width, so we do.
+    o5:   arraystring5,  arraystring6
   obj2usinginlineformatsometimes:
     o1: str1  o2: str2  o3:-9  o4:10e3
-    o5: longerstr3withitsownline
-    o6: longerstr4withitsownline
-    o7: str5  o8: str6  o9:-18
+    o5: this one is super duper long it
+    /  is a basic value a bare string
+    /  folding it is our only option it
+    /  is on its own line and it still
+    /  doesn't fit and because we can't
+    /  pack it with anything else it
+    /  must be alone.
+    o6: longerstr3withitsownline
+    o7: longerstr4withitsownline
+    o8: str5  o9: str6  o10:-18
 ```
 
 ### Basic Examples
@@ -1455,6 +1537,50 @@ we reset n to 0, so now all we have to do is show the table json `[{....}]` at n
   k:5
 // It would be here  />
 ```
+
+**Example: deep array glyph use** (30 levels of array; we are allowed but not required to include the two closing `/>`, as there is no more data after either of the `/>` symbols)
+```json
+[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+```
+```
+[ [ [ [ [ [ [ [ [ [  /<
+[ [ [ [ [ [ [ [ [ [  /<
+[ [ [ [ [ [ [ [ [ [ 0
+                     />
+                     />
+```
+
+MOTIVATIONS AND TRADEOFFS REGARDING INDENT LEVEL ADJUSTMENT GLYPHS:
+
+Indent level adjustment glyphs are in some ways contrary to the goals of the project.  It necessary to provide generators with a way to fit large and deep trees into finite display widths, and while we can adjust the format itself to stave off this unfortunate necessity as long as possible, there becomes a point at which an indent level adjustment might become superior overflowing and possibly forcing the user to side scroll.  Sadly, indent level adjustment glyphs in most contexts go against the principle that you should know where you are in the tree to some extent just by looking at the position of the indent on your page, as it changes the meaning of a visible indent.  However, in some contexts side scrolling is difficult or impossible, and on a printed page, automatic text wrapping destroys the integrity of the output.
+
+In certain circumstances, such as tables, using indent adjustment glyphs by default before and after enhances readability by forcing the table to the left side of the reading area where the user might expect to find a table, creates room for additional data, and has only a small impact on positional awareness as long as we reliably adjust indent before and after the table.  This should feel familiar to a reader that also looks at ``` and left indented `` multiline strings, as it is more likely to feel like a display method for a field rather than an indent level, even if it is not necessarily that on a syntax or parsing level.
+
+Adjusting the indent level for more than just the duration of a table or a multiline string in order to accomodate deeply indented trees is inherently more hazardous to the locality of the viewing experience, even though it may be necessary.  As such, generators may choose to, but need not, add comments near the indent level adjustment to orient the reader.  The form that these comments might take, or whether to generate them at all is left up to the generator, but I would suggest something like this to tell the user what visible indent level means if that is important to your application.  For many purposes, perhaps most, the reader may be less interested in the exact depth,and comments may be better omitted.  This commenting idea is not part of the rules of the specification, it is just a helpful note to remind generators that they can use comments to orient the reader, particularly when the generator is forced to do something disorienting to the reader.
+
+Comments must always be ignored by parsers.  The comments below are purely optional, and may, or may not be generated purely to orient the reader, in this case as to the actual n indent level of visible n=0.  Generators are allowed to add as many or as few comments as they like, to anything, for any reason, but hopefully with the goal of improving the reading experience.  As always, comments MUST be on their own line as required by the specification.
+
+AN EXAMPLE OF USING COMMENTS TO ANCHOR AND DEFINE THE LEFT MARGIN AS A NONZERO INDENT LEVEL AND INFORM THE READER REGARDING THE ACTUAL INDENT LEVEL
+```
+  something:
+    somethingelse:
+     /<
+//4
+(more tjson, indent level is now n=4 even though visible n=0 after the indent glyph, the //4 at the very start of the line indicates that visible n=0 is really n=4)
+//4
+     /<
+//8
+(more tjson, indent level is now n=8 even though visible n=0 after the indent glyph, the //8 at the very start of the line indicates that visible n=0 is really n=8)
+//8
+     />
+//4
+    (more tjson, indent level is now n=8, visible n=4 after the indent glyph, the //4 at the very start of the line indicates that visible n=0 is really n=4)
+//4
+     />
+//0
+    (more tjson, indent level is now both visible n=4 and actual n=4, the //0 indicates that visible n=0 is really n=0)
+```
+
 
 ---
 
