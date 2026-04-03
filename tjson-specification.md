@@ -48,13 +48,13 @@ I expect there are also going to be other use cases I can't foresee right now, a
 
 1) Making it easier for humans to write if it interferes with reading.
 
-2) Anything that will make it not round trip from JSON (excepting comments and details that do not change the data like exactly which characters were escaped rather than literal in the original JSON).
+2) Anything that will make data not round trip from JSON.  This excepts comments, which have no JSON representation at all, and details that do not change the data, such as exactly which characters were escaped rather than literal in the original JSON, or the non-data indenting or spacing within the original JSON.
 
 3) Anything that will make our output look more like code garbage than it has to - the point is to be as close to the regular human reading experience as possible without taking away the ability to understand the underlying JSON structure.  Certain things are going to look like random garbage no matter what we do, those things will be left alone.  If you have a kilobyte of random punctuation in a string in your JSON, it's pointless to try to change that to make it more human readable.
 
 4) Making changes in the specification of the format to make code run more efficiently, or to make it fit some theoretical computer science grammar category.  This is for humans first, and computers are fast, it's ok if the code has to work a little harder to make it readable.  We do try to keep the code as fast as possible given the human first constraint, and we have a Rust implementation, so the performance is there.
 
-5) Specifying folding rules to stay within pathologically small fixed width values, or for where n is almost the same as width (an indent glyph is provided to avoid n getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accomodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
+5) Specifying folding rules to stay within pathologically small fixed width values, or for where the indent level n is almost the same as width (an indent glyph is provided to avoid the indent level getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accomodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
 
 6) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
 
