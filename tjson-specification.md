@@ -96,7 +96,7 @@ WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incom
 
 ### Generator Options
 
-THERE ARE MANY PLACES WHERE THE FUNCTION THAT CREATES THE TJSON HAS OPTIONS - It is ok for it to pick something that looks good for the use case as long as it outputs valid TJSON - which one to pick is a suggestion - generally bare is preferred for readability but a particular parser that had a reason would be allowed to do something else, but shouldn't do it without a reason - you might want to make your own parser that made output that looked good with your dataset and that's absolutely acceptable, but don't willy-nilly do something not preferred if you don't think you are getting something out of it
+THERE ARE MANY PLACES WHERE THE FUNCTION THAT CREATES THE TJSON HAS OPTIONS - It is ok for it to pick something that looks good for the use case as long as it outputs valid TJSON - which one to pick is a suggestion - generally bare is preferred for readability but a particular parser that had a reason would be allowed to do something else, but shouldn't do it without a reason - you might want to make your own parser that made output that looked good with your dataset and that's absolutely acceptable, but don't willy-nilly do something that's not preferred unless you think you are getting something out of it
 
 ### Forbidden Characters
 
@@ -1110,8 +1110,6 @@ An absent cell (key not present in that object) is represented by an empty cell 
 
 Uneven and ugly padding is not desirable, and generators should mostly not produce tables if a reasonable looking table cannot be produced, but parsers must accept ugly and uneven padding too as long as it complies with the rules.  Our examples generally have very nice perfectly even padding, but nice padding is not required for parse validity.  Padding does not have to be consistent from row to row or column to column to be valid.
 
-Note that the innermost object first data character above, the 'a' key, is in column 9, and the table representation has the first data character, the `|`, at column 9 too.  The `|` in a table is effectively a data character, it isn't inside the margins like the other pipes in TJSON.  The idea is to be consistent between the table and non-table representation.  Bare strings can't start with `|` precisely so that `|` at any value position is always unambiguously a table row. The "forbidden start characters" for bare strings aren't arbitrary restrictions, they're all load-bearing in some way, either for the human viewer, or for the parsing grammar. `/` can't start a bare string because it's a fold/comment marker, `` ` `` can't because it's multiline, `|` can't because it's a table row.  The whole thing is designed so the first character tells you exactly what you're looking at, both for easy reading, and unambiguous parsing.  The reason we exclude quotelike, commalike, pipelike, as opposed to just the thing itself, is to protect humans from confusion, not the parser.  I don't want parsers to parse the quotelike but not quote and so forth cases, they have to reject them, because those inclusions while helping humans, also create design space for future feature expansion - so it's not 100% for human clarity.  I try to be clear about when something is parsable, and when it's FORBIDDEN or NOT ALLOWED.  If it's FORBIDDEN or NOT ALLOWED, and the text doesn't specifically say we should parse it even if it's wrong, we need to fail rather than parse it to preserve future design surface for features.  The same thing is true for the wrong number of spaces - that's not a snafu the parser should try to fix, it's breakage that ought to cause a parsing failure.
-
 **Example:** table format
 ```json
 [{"a":1, "b":"xyz", "c":"def", "d":"yyy", "E":5},{"a":"12", "b":14, "c":null, "d":"yxx"},{"a":true, "b":14, "E":"yxx"}]
@@ -1268,6 +1266,10 @@ level1:
         b: pearwithfoldno
         / spaces
 ```
+#### Parallelism between table and non-table rendering of the same data
+
+Note that the innermost object first data character above, the 'a' key, is in column 9, and the table representation has the first data character, the `|`, at column 9 too.The `|` in a table is effectively a data character, it isn't inside the margins like the other pipes in TJSON.  The idea is to be consistent between the table and non-table representation.  Bare strings can't start with `|` precisely so that `|` at any value position is always unambiguously a table row. The "forbidden start characters" for bare strings aren't arbitrary restrictions, they're all load-bearing in some way, either for the human viewer, or for the parsing grammar. `/` can't start a bare string because it's a fold/comment marker, `` ` `` can't because it's multiline, `|` can't because it's a table row.  The whole thing is designed so the first character tells you exactly what you're looking at, both for easy reading, and unambiguous parsing.  The reason we exclude quotelike, commalike, pipelike, as opposed to just the thing itself, is to protect humans from confusion, not the parser.  I don't want parsers to parse the quotelike but not quote and so forth cases, they have to reject them, because those inclusions while helping humans, also create design space for future feature expansion - so it's not 100% for human clarity.  I try to be clear about when something is parsable, and when it's FORBIDDEN or NOT ALLOWED.  If it's FORBIDDEN or NOT ALLOWED, and the text doesn't specifically say we should parse it even if it's wrong, we need to fail rather than parse it to preserve future design surface for features.  The same thing is true for the wrong number of spaces - that's not a snafu the parser should try to fix, it's breakage that ought to cause a parsing failure.
+
 
 **Example: two tables stacked in an array**
 ```json
@@ -1283,6 +1285,7 @@ level1:
         |3       | pear  |
 ```
 
+**Example: parsable, but useless and ugly**
 *(Bad example — should parse, but do not generate empty object rows unless you have a very special case generator; violates one way to represent empty object)*
 ```json
 [{},{},{}]
