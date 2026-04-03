@@ -1,28 +1,26 @@
-# Text Json (TJSON) Specification v0.3.0
+# Text Json (TJSON) Specification v0.3.1
 
 Created by R.F. Anthracite rfa@rfanth.com
 
 TJSON specification (stands for Text JSON) ([textjson.com](https://textjson.com))
 
-THIS IS THE SPEC - a future formal RFC type spec should be derived from this - it's supposed to be more parseable by LLMs and such - but if there is any difference in the rules whatsoever (and there shouldn't be, the RFC type document is the bug, not this).  Any underspecification here specified in a future RFC document is a bug there for specifying something there that's not defined or logically and necessarily implied here, and a bug here for not specifying it, as underspecification here is pointed out explicitly.
-
 ---
 
 ## GOALS
 
-The world is now flooded with tree type data, often sent through json at some point, but the ability for humans to read json hasn't improved along with it.  Much of our tree data already contains mostly human readable things, often inputted by humans, with keys chosen for comprehensibility by programmers, but the deep tree formats preferred by computers make it really hard to read.  The outputs take up miles of vertical space for very little actual information, and it's about time someone did something about it.  As such, I've developed a json format for humans, called TJSON (short for Text Json), a round trippable to JSON format for humans that can be embedded in text.
+The world is now flooded with tree type data, often sent through JSON at some point, but the ability for humans to read JSON hasn't improved along with it.  Much of our tree data already contains mostly human readable things, often inputted by humans, with keys chosen for comprehensibility by programmers, but the deep tree formats preferred by computers make it really hard to read.  The outputs take up miles of vertical space for very little actual information, and it's about time someone did something about it.  As such, I've developed a JSON format for humans, called TJSON (short for Text Json), a round trippable to JSON format for humans that can be embedded in text.
 
-Humans read from screens in squares.  Computers read character by character, ignoring linefeeds, making json look just fine, but any attempt to turn json into normal text generally looks like a thin line passing through the screen going down to infinity.  Pretty printing helps, but it can't address many of the core readability problems.  This is my attempt to fix that.
+Humans read from screens in squares.  Computers read character by character, ignoring linefeeds, making JSON look just fine, but any attempt to turn JSON into normal text generally looks like a thin line passing through the screen going down to infinity.  Pretty printing helps, but it can't address many of the core readability problems.  This is my attempt to fix that.
 
-The primary goal is to be really easy for a human to read, while still being zero-ambiguity to a programmer and perfectly preserving all data on round trip that JSON implementations preserve, which is everything except for duplicate keys.  This requires vertical compactness, among other things.  A lot of json data almost works as regular human text, but is made difficult to read by the json format itself.  This format should look as little like code gibberish as possible while allowing a competent human to instantly understand the underlying data structures and types.  Tradeoffs are made here between having obvious types and not looking like code gibberish - and the tradeoff is basically if you know one simple rule (bare strings always have a leading space before them), you always know the type, and if you don't, it's understandable as text.  This both lets programmers know what they need to know while getting the best possible reading experience, and lets non-programmers just see language even if they barely know what a type is.
+The primary goal is to be really easy for a human to read, while still being zero-ambiguity to a programmer and perfectly preserving all data on round trip that JSON implementations preserve, which is everything except for duplicate keys.  This requires vertical compactness, among other things.  A lot of JSON data almost works as regular human text, but is made difficult to read by the JSON format itself.  This format should look as little like code gibberish as possible while allowing a competent human to instantly understand the underlying data structures and types.  Tradeoffs are made here between having obvious types and not looking like code gibberish - and the tradeoff is basically if you know one simple rule (bare strings always have a leading space before them), you always know the type, and if you don't, it's understandable as text.  This both lets programmers know what they need to know while getting the best possible reading experience, and lets non-programmers just see language even if they barely know what a type is.
 
-Humans usually will not edit TJSON, even though the project is not hostile to editing, that's not the point - the point is for a computer to take JSON, pump it into TJSON, and get an unusually human readable format that can be consistently converted back into JSON.  The point of the bare string and bare key forms is to produce text that looks maximally readable to humans.  If it's not going to be readable due to its content, feel free to fall back to double quoted forms even when not required - if it's going to look like code anyway there's no reason to force the bare forms.  While it is a hard requirement not to lose data and to be round trippable to json that represents exactly equivalent data, it is likely that in many use cases it will be a read-mostly format, and that's ok.
+Humans usually will not edit TJSON, even though the project is not hostile to editing, that's not the point - the point is for a computer to take JSON, pump it into TJSON, and get an unusually human readable format that can be consistently converted back into JSON.  The point of the bare string and bare key forms is to produce text that looks maximally readable to humans.  If it's not going to be readable due to its content, feel free to fall back to double quoted forms even when not required - if it's going to look like code anyway there's no reason to force the bare forms.  While it is a hard requirement not to lose data and to be round trippable to JSON that represents exactly equivalent data, it is likely that in many use cases it will be a read-mostly format, and that's ok.
 
 We should usually have a pretty good idea of where we are in the data structure just by looking at where we are on the page.  In some other standards, including JSON, knowing what level you are at requires counting various delimiters that may be several screens away from the line that you are looking at.  Because this is inherently difficult, the viewer ends up counting indents anyway in order to discern their location.  As long as the viewer is likely to end up counting indents anyway, why not make them reliably mean something wherever possible?  In TJSON, if we are at 10 spaces indent, we are five levels deep.  This is something that we can rely upon without looking around the document in most cases.  Also, because the indent level is always 2, we can actually see small discrepancies in it reliably with our naked eye, which is not the case for larger or optional indent steps.
 
 Rigidly spaced outputs can sometimes help not only the viewing experience, but the editing experience as well.  Some subtle mistakes are best avoided by making them unlikely to parse.  In TJSON, the very position on the screen of the start of the text carries meaning.  Tolerating small variations in those spaces is not helpful to anyone, as doing so both degrades the visual experience by depriving it of meaningful demarcations, and makes mistakes more likely to carry hidden and erroneous meaning.
 
-The parser must be able to parse all valid TJSON to json that represents the exact same data that the original json represented without any options on the TJSON parser, no matter what readability preferences were used with the generator to create TJSON from the original JSON.  Valid numeric representations in the original JSON must be preserved when translating to TJSON, and vice versa.  Exponent 'e+' vs just 'e' need not be distinguished as the meaning is identical and the look is nearly so.  Duplicate keys are not preserved by most JSON parsers in the wild, and are beyond the round-trip data fidelity guarantees that we try to enforce.  It doesn't mean that implementations should not try to preserve duplicate keys, but they can be valid TJSON implementations even if they do not.  If the platform preserves duplicate keys, the TJSON implementation should too, but is not required to do so.
+The parser must be able to parse all valid TJSON to JSON that represents the exact same data that the original JSON represented without any options on the TJSON parser, no matter what readability preferences were used with the generator to create TJSON from the original JSON.  Valid numeric representations in the original JSON must be preserved when translating to TJSON, and vice versa.  Exponent 'e+' vs just 'e' need not be distinguished as the meaning is identical and the look is nearly so.  Duplicate keys are not preserved by most JSON parsers in the wild, and are beyond the round-trip data fidelity guarantees that we try to enforce.  It doesn't mean that implementations should not try to preserve duplicate keys, but they can be valid TJSON implementations even if they do not.  If the platform preserves duplicate keys, the TJSON implementation should too, but is not required to do so.
 
 Though a more text like presentation is less forward about type information, it should be possible for the user to see the data as much as possible, and with a bit of knowledge, to be able to discern the type.  Spaces at the end of lines are invisible to the user.  Also, part of our round trip path might flow through text editors that tend not to be happy about spaces at the ends of lines.  As such, spaces at the end of lines in the output, though not forbidden, are never necessary for proper parsing, and are avoided wherever possible.
 
@@ -34,13 +32,13 @@ TJSON is supposed to be flexible for generators.  Many of the fields have more t
 
 1) JSON COMPATIBLE DATA THAT LOOKS MORE LIKE REGULAR TEXT - This includes both nontechnical people that want to understand what is included in data, and technical people that want to be able to read their logs or treelike data more comfortably, or just without scrolling forever.
 
-2) JSON THAT IS MORE EFFICIENT WITH YOUR SCREEN CASE AND TAKES UP LESS VERTICAL SPACE - TJSON is good when you just want to be able to read and understand json without it looking like garbage or taking excessive amounts of vertical space (logging for example), and when you want json to be readable as text without looking like json.  These seem incompatible, but after much reflection I actually think they are very similar problems.
+2) JSON THAT IS MORE EFFICIENT WITH YOUR SCREEN SPACE AND TAKES UP LESS VERTICAL SPACE - TJSON is good when you just want to be able to read and understand JSON without it looking like garbage or taking excessive amounts of vertical space (logging for example), and when you want JSON to be readable as text without looking like JSON.  These seem incompatible, but after much reflection I actually think they are very similar problems.
 
-3) HUMANS WHO WANT TO READ JSON WHILE MAKING THE DATA STRUCTURE LESS NOTICEABLE, BUT NOT INVISIBLE - This includes pretty much everyone that has to look at a lot of moderate complexity json that contains large portions of human readable data.
+3) HUMANS WHO WANT TO READ JSON WHILE MAKING THE DATA STRUCTURE LESS NOTICEABLE, BUT NOT INVISIBLE - This includes pretty much everyone that has to look at a lot of moderate complexity JSON that contains large portions of human readable data.
 
-4) STORING JSON IN A HUMAN DOCUMENT WITHOUT LOSING INFORMATION - Embedding json in a human document, while allowing it to be turned back into the data that represented it without loss.  TJSON is great for the situation where you need something that is readable as text but also needs to be extracted later on a data layer as standard json.
+4) STORING JSON IN A HUMAN DOCUMENT WITHOUT LOSING INFORMATION - Embedding JSON in a human document, while allowing it to be turned back into the data that represented it without loss.  TJSON is great for the situation where you need something that is readable as text but also needs to be extracted later on a data layer as standard JSON.
 
-5) EMBEDDING LIMITED AMOUNTS OF JSON IN AN ENTIRELY HUMAN DOCUMENT WITHOUT MAKING IT LOOK LIKE CODE (OR AS LITTLE AS POSSIBLE IF YOUR DATA STRUCTURE IS COMPLEX) - Avoiding all code like appearance is possible, as long as you are careful about the depth of your data structures and what you have in the json.  If you make sure not to descend more than one array or object level at once, it will become entirely invisible in many cases.
+5) EMBEDDING LIMITED AMOUNTS OF JSON IN AN ENTIRELY HUMAN DOCUMENT WITHOUT MAKING IT LOOK LIKE CODE (OR AS LITTLE AS POSSIBLE IF YOUR DATA STRUCTURE IS COMPLEX) - Avoiding all code like appearance is possible, as long as you are careful about the depth of your data structures and what you have in the JSON.  If you make sure not to descend more than one array or object level at once, it will become entirely invisible in many cases.
 
 I expect there are also going to be other use cases I can't foresee right now, as pursuit of maximum readability has resulted in a shared format that programmers and non-programmers can both love for slightly different reasons, and that's a good thing.
 
@@ -50,9 +48,9 @@ I expect there are also going to be other use cases I can't foresee right now, a
 
 1) Making it easier for humans to write if it interferes with reading.
 
-2) Anything that will make it not round trip from json (excepting comments and details that do not change the data like exactly which characters were escaped rather than literal in the original json).
+2) Anything that will make it not round trip from JSON (excepting comments and details that do not change the data like exactly which characters were escaped rather than literal in the original JSON).
 
-3) Anything that will make our output look more like code garbage than it has to - the point is to be as close to the regular human reading experience as possible without taking away the ability to understand the underlying json structure.  Certain things are going to look like random garbage no matter what we do, those things will be left alone.  If you have a kilobyte of random punctuation in a string in your json, it's pointless to try to change that to make it more human readable.
+3) Anything that will make our output look more like code garbage than it has to - the point is to be as close to the regular human reading experience as possible without taking away the ability to understand the underlying JSON structure.  Certain things are going to look like random garbage no matter what we do, those things will be left alone.  If you have a kilobyte of random punctuation in a string in your JSON, it's pointless to try to change that to make it more human readable.
 
 4) Making changes in the specification of the format to make code run more efficiently, or to make it fit some theoretical computer science grammar category.  This is for humans first, and computers are fast, it's ok if the code has to work a little harder to make it readable.  We do try to keep the code as fast as possible given the human first constraint, and we have a Rust implementation, so the performance is there.
 
@@ -72,9 +70,9 @@ Bare strings, and bare keys here are portable concepts that others might be able
 
 Some of the indent level parsing concepts in this document may also be portable, and spreading those ideas I think is important, even if it's well beyond the scope of the TJSON format.
 
-Also, ideas about having multiple data preserving representations that read differently and are chosen between intelligently by the generator are also interesting, though by no means unique to this document (json pretty printers are already pushing that as far as the JSON specification allows), but I do think it's an interesting and useful idea that the data format itself ought to provide choices meant for human transparency, which I think will become more and more important in our LLM driven world.
+Also, ideas about having multiple data preserving representations that read differently and are chosen between intelligently by the generator are also interesting, though by no means unique to this document (JSON pretty printers are already pushing that as far as the JSON specification allows), but I do think it's an interesting and useful idea that the data format itself ought to provide choices meant for human transparency, which I think will become more and more important in our LLM driven world.
 
-One of the problems with json pretty printers is that even though they are impressive, and the authors are ingenious, they tend to be very fragile and degrade when you take them out of whatever narrow range of data structures that they were designed for.  That is due to limitations in the json format itself, not any lack of ingenuity of the pretty printer authors.  You end up getting a few spectacular best cases that fall apart with more varied real data, due entirely to the limitations of the json format itself.  It is important to recognize the visual straitjacket for what it is.
+One of the problems with JSON pretty printers is that even though they are impressive, and the authors are ingenious, they tend to be very fragile and degrade when you take them out of whatever narrow range of data structures that they were designed for.  That is due to limitations in the JSON format itself, not any lack of ingenuity of the pretty printer authors.  You end up getting a few spectacular best cases that fall apart with more varied real data, due entirely to the limitations of the JSON format itself.  It is important to recognize the visual straitjacket for what it is.
 
 I've chosen to exploit what I think is an underexplored part of the design space of text/data file formats in TJSON, exploring how much we can get out of human perception if we discard the limitation that it must be easy to edit.  Up to this point I think we've often treated data formats as if it's about HUMANS or MACHINES, and made a compromise between HUMANS and MACHINES, but it's not really, it's about HUMAN READABILITY, HUMAN EDITABILITY, and MACHINES.  I'm sacrificing human editability to see how far I can push human readability without losing any information to a machine whatsoever.
 
@@ -92,7 +90,7 @@ There is only one root level value in TJSON at indent 0.  More than one is not a
 
 ### EOL Handling
 
-INCOMING UNESCAPED WINDOWS TYPE CRLF AND UNESCAPED LF ARE BOTH TREATED AS EOL, even in the same file.  A bare CR (carriage return not followed by LF) is a parse error - our parser should never see a bare CR.  If it does, that's an error.  TAB characters are only allowed as literal content inside multiline strings. A tab anywhere else is a parse error.  Implementors may choose to avoid multiline strings that contain tabs and make them regular json strings instead.
+INCOMING UNESCAPED WINDOWS TYPE CRLF AND UNESCAPED LF ARE BOTH TREATED AS EOL, even in the same file.  A bare CR (carriage return not followed by LF) is a parse error - our parser should never see a bare CR.  If it does, that's an error.  TAB characters are only allowed as literal content inside multiline strings. A tab anywhere else is a parse error.  Implementors may choose to avoid multiline strings that contain tabs and make them regular JSON strings instead.
 
 WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incompatible with your use case or the user specifically requests otherwise through an option, in which case CRLF is EOL instead.  No other EOL's are allowed.
 
@@ -149,7 +147,7 @@ Empty string (this is the ONLY way to express an empty string):
 ""
 ```
 
-Booleans (this is the ONLY way to express json true or json false (as distinct from the strings "true" and "false")):
+Booleans (this is the ONLY way to express JSON true or JSON false (as distinct from the strings "true" and "false")):
 ```
 true
 false
@@ -163,7 +161,7 @@ TJSON is case sensitive.  For example, 'True', 'False', and 'NULL' are parse err
 
 "true" "false" "null" "[]" and "{}" are allowed as BARE STRINGS by default, and in principle are allowed as BARE KEYS (but bare key rules forbid "", "[]", and "{}" already, independent of their status as BASIC TYPES, so these are not possible, and BARE STRINGS already forbid "" as it both starts and ends with a quotelike).
 
-Implementors may choose as an option or consistent with their particular use case to force double quotes around some strings.  Strings that are the exact string representation of a BASIC TYPE ("true" "false" "null" "[]" and "{}") are and should be allowed BARE STRINGS by default, but an implementor might force these particular strings only to be double quoted, or even forbid bare strings entirely (strongly discouraged, definitely not a good idea by default, BARE STRINGS are preferred).  An implementor might forbid the string version of some or all of the BASIC TYPES above ("null", "true", "false", "[]", "{}") from being bare strings in tables (not the default).  Such strings must be parsable anywhere as bare strings, including in tables.  The spec intentionally does not force the strings null, true, false, {}, and [] to be double quoted json type strings rather than bare strings unless the user explicitly chooses that option.
+Implementors may choose as an option or consistent with their particular use case to force double quotes around some strings.  Strings that are the exact string representation of a BASIC TYPE ("true" "false" "null" "[]" and "{}") are and should be allowed BARE STRINGS by default, but an implementor might force these particular strings only to be double quoted, or even forbid bare strings entirely (strongly discouraged, definitely not a good idea by default, BARE STRINGS are preferred).  An implementor might forbid the string version of some or all of the BASIC TYPES above ("null", "true", "false", "[]", "{}") from being bare strings in tables (not the default).  Such strings must be parsable anywhere as bare strings, including in tables.  The spec intentionally does not force the strings null, true, false, {}, and [] to be double quoted JSON type strings rather than bare strings unless the user explicitly chooses that option.
 
 If your generator actually uses MINIMAL JSON as more than as a last ditch effort, that generator should probably have different rules for when to use a bare key than the default generator.  If a generator actually uses MINIMAL JSON more than in extremis, for stuff like `  barekey:["minimal","json"]`, the generator should limit the usage of bare strings for visual analogs, by forcing double quotes on anything that starts or ends with square brackets or curly braces, and any close unicode analogs that might mislead a reader.
 
@@ -177,7 +175,7 @@ Number any valid JSON number (0, 0.1, -5, 1e-3, -5e10 are all good), note that t
 ### Comments
 
 Comments (this is the ONLY way to express comments):
-Comments are allowed, they must start with a `//` and be on their own line.  A comment cannot be within a MULTILINE STRING to include its starting and ending glyphs.  A comment may not be within a fold.  Comments are allowed to have any number, or 0 spaces before the `//`.  Anything after the `//` is ignored until we hit an EOL character.  Comments do not need to respect the indent level, and they do not affect the indent level irrespective of how many spaces they do or do not have before.  Comments at the end of lines containing anything else are not allowed.  There is no other form of comment.  A comment of course can never round trip with json, and will probably rarely get used as this is a read almost always format, written almost exclusively by computers, but they are allowed.  It made sense to exclude them from the first character of bare strings and bare keys anyway as they looked like comments, so we might as well make them actual comments if we have to reserve `/` anyway.
+Comments are allowed, they must start with a `//` and be on their own line.  A comment cannot be within a MULTILINE STRING to include its starting and ending glyphs.  A comment may not be within a fold.  Comments are allowed to have any number, or 0 spaces before the `//`.  Anything after the `//` is ignored until we hit an EOL character.  Comments do not need to respect the indent level, and they do not affect the indent level irrespective of how many spaces they do or do not have before.  Comments at the end of lines containing anything else are not allowed.  There is no other form of comment.  A comment of course can never round trip with JSON, and will probably rarely get used as this is a read almost always format, written almost exclusively by computers, but they are allowed.  It made sense to exclude them from the first character of bare strings and bare keys anyway as they looked like comments, so we might as well make them actual comments if we have to reserve `/` anyway.
 
 ---
 
@@ -188,7 +186,7 @@ OBJECT KEYS have two choices that the generator can pick from, the default is to
 
 ### Bare Keys
 
-BARE KEYS (preferred by default, even when it's also a basic type like "true" "false" or "null" (the bare key rules already forbid "{}" and "[]") - this is even safer than it is for bare strings as keys in json are always strings reducing the likelihood of confusion)
+BARE KEYS (preferred by default, even when it's also a basic type like "true" "false" or "null" (the bare key rules already forbid "{}" and "[]") - this is even safer than it is for bare strings as keys in JSON are always strings reducing the likelihood of confusion)
 
 BARE KEYS are required to meet certain rules, which are expressed below - not everything is allowed to be a BARE KEY
 
@@ -202,9 +200,9 @@ Valid BARE KEYS MUST satisfy all of the following rules: (MUST - this is not opt
 
 ### JSON String Keys
 
-A json double quoted object key (a JSON STRING) that is allowed to contain escape characters and is exactly equivalent to a double quoted json object key.
+A JSON double quoted object key (a JSON STRING) that is allowed to contain escape characters and is exactly equivalent to a double quoted JSON object key.
 
-In this document, object keys are just keys, and the default favored form of them is BARE KEYS wherever possible (described later), falling back to json type double quoted keys.  This is described more later in the document, but is added here just to clarify that the STRINGS rules below should never be applied to object keys.  An object key can be folded.
+In this document, object keys are just keys, and the default favored form of them is BARE KEYS wherever possible (described later), falling back to JSON type double quoted keys.  This is described more later in the document, but is added here just to clarify that the STRINGS rules below should never be applied to object keys.  An object key can be folded.
 
 ### Strings Overview
 
@@ -294,7 +292,7 @@ Another way of saying the same thing is that at the start of the object key incr
 
 ### String Folding
 
-All string folding, json string, bare string or bare key MUST be between the first and last data character.  In both the json string `"abcd"` and the identical bare string, ` abcd` the first and last data character are the "a" and the "d" respectively.  In the json string `"\ \ \ "` the first data character is the first space, and the last data character is the last space including its escape backslash immediately before.
+All string folding, JSON string, bare string or bare key MUST be between the first and last data character.  In both the JSON string `"abcd"` and the identical bare string, ` abcd` the first and last data character are the "a" and the "d" respectively.  In the JSON string `"\ \ \ "` the first data character is the first space, and the last data character is the last space including its escape backslash immediately before.
 
 FOLDING IN THE MIDDLE OF A DATA CHARACTER OR IN THE MIDDLE OF A VISIBLE CHARACTER IS ALWAYS FORBIDDEN IN EVERY CONTEXT (in this case `"\ "` is a single data character, and anything displayed together is also a single visible character, like an emoji for instance).  We could (but probably should avoid) folding in the middle of the escape sequence for an emoji smiley face 😀 `\uD83D\uDE00` by folding before the escaped `\uDE00`, but we couldn't fold in the middle of those two literal characters if they weren't escaped as the user would no longer see a smiley face when reading the TJSON.
 
@@ -348,7 +346,7 @@ LOGIC:  this can look good sometimes, but it's also used as the fallback when we
 ```
 
 String (alternate): JSON STRING (with folding)
-LOGIC: we are folding, so indent n+2, json strings cannot contain a real LF, so we know we did it when we add a real LF, add n-2 spaces to the next line, then a fold marker with a space `/ ` then continue with json, n-2 once we get to the last `"`.  A fold SHOULD never be preceded by whitespace as it may get stripped but the parser should handle it.
+LOGIC: we are folding, so indent n+2, JSON strings cannot contain a real LF, so we know we did it when we add a real LF, add n-2 spaces to the next line, then a fold marker with a space `/ ` then continue with JSON, n-2 once we get to the last `"`.  A fold SHOULD never be preceded by whitespace as it may get stripped but the parser should handle it.
 ```
 "foldingat
 / onlyafew\r\n
@@ -374,7 +372,7 @@ Multiline strings are 100% literal after indent stripping between the starting g
 
 Comments are not allowed within multiline strings.  This includes anywhere between the starting glyph and the ending glyph, not just the string itself.
 
-When parsing multiline strings, both LF and CRLF must parse as the LOCAL EOL INDICATOR, even if they are both present.  Multiline strings in the ` `` ` or `` ` `` form (but not ` ``` `) can be folded by the implementor like json strings.  Generators should default to multiline strings not being foldable.  If we fold them and add an EOL, we must use a fold marker in the last two spaces of the indent `/ ` (`/ ` replaces the last two spaces of the indent of `| ` for ` `` `), but if it's native to the string, we leave the fold marker out (as it was not folded, it's just the data).  A ` `` ` multiline string MUST have a marker within the margin of `| ` (or `/ ` iff that line is folded).  A ` ``` ` or `` ` `` multiline string may not have a pipe margin marker.
+When parsing multiline strings, both LF and CRLF must parse as the LOCAL EOL INDICATOR, even if they are both present.  Multiline strings in the ` `` ` or `` ` `` form (but not ` ``` `) can be folded by the implementor like JSON strings.  Generators should default to multiline strings not being foldable.  If we fold them and add an EOL, we must use a fold marker in the last two spaces of the indent `/ ` (`/ ` replaces the last two spaces of the indent of `| ` for ` `` `), but if it's native to the string, we leave the fold marker out (as it was not folded, it's just the data).  A ` `` ` multiline string MUST have a marker within the margin of `| ` (or `/ ` iff that line is folded).  A ` ``` ` or `` ` `` multiline string may not have a pipe margin marker.
 
 MULTILINE STRING text characters are meant to be extremely broad, but the user must be able to see whatever text is contained in it.  It's ok if what the user sees isn't necessarily the exclusive way of displaying what the user sees.  If an accented letter might be expressed two different ways in unicode, that's fine in this context.  Similarly, if an emoji might display slightly differently or in an unexpected or identical way, that's ok too as the user can at least see an emoji.  The consequence of forbidding a character from here is forbidding an entire document, which is not desirable unless we have to do it for safety reasons.  Also, if a character affects layout like a newline, we aren't interpreting it as such, creating an inconsistency in what the user sees, so we ban line separator and paragraph separator too.
 
@@ -765,11 +763,11 @@ Array ender 3: newline
 
 Object starter: newline + (increment indent by 2) + indent level spaces
 
-A json key is always a string, which we exploit - a BARE KEY doesn't need a preceding space to distinguish it from other types because we know the next thing HAS to be a string as JSON can't have non-string keys. A `:` in a key must be shown as a JSON STRING with `"keystring:morestring"` - in other words we are using a JSON string here.  BARE KEYS are preferred to JSON STRINGS by default, but sometimes a particular key will not meet the requirements of a BARE KEY and must be a JSON STRING instead.
+A JSON key is always a string, which we exploit - a BARE KEY doesn't need a preceding space to distinguish it from other types because we know the next thing HAS to be a string as JSON can't have non-string keys. A `:` in a key must be shown as a JSON STRING with `"keystring:morestring"` - in other words we are using a JSON string here.  BARE KEYS are preferred to JSON STRINGS by default, but sometimes a particular key will not meet the requirements of a BARE KEY and must be a JSON STRING instead.
 
 FOLDING is not allowed in CANONICAL TJSON
 
-Anything else as a key name is just like json `"keyname"` with the same rules
+Anything else as a key name is just like JSON `"keyname"` with the same rules
 
 ### Width and Packing Settings
 
@@ -1141,7 +1139,7 @@ A table may also fold lines, and if it does it will have a fold marker on the fo
 
 In non table contexts, there is a guaranteed space after the fold marker because it is placed within the margin, which is also the case here.  The reference implementation doesn't generate folded table lines by default, and other implementations do not have to generate this, but all implementations do have to correctly parse it.
 
-Folding is allowed only within optional extra right padding (probably better looking) and between the first data character (this would be the a in both the json double quoted `|"abc"` and the bare string `| abc`) and the last data character of the string that follows the table `|`.  This is exactly like the rules for string folding intentionally.  Number folding follows the same rule.
+Folding is allowed only within optional extra right padding (probably better looking) and between the first data character (this would be the a in both the JSON double quoted `|"abc"` and the bare string `| abc`) and the last data character of the string that follows the table `|`.  This is exactly like the rules for string folding intentionally.  Number folding follows the same rule.
 
 Folding does not change the rules as far as empty cells or the exact number of `|` characters.
 
@@ -1337,9 +1335,9 @@ PIPELIKE CHARACTER DEFINITION A pipelike character is U+007C (VERTICAL LINE) or 
 
 MINIMAL JSON (JSON CONTAINING A NON-EMPTY OBJECT OR NON-EMPTY ARRAY WITH NO INTERMEDIATE WHITE SPACE):
 
-This allows nonempty objects and non-empty arrays only as all simpler json values without extra whitespace are already also simple TJSON values already and require no additional restrictions or rules to support.  This section only applies to nonempty objects and arrays that the generator desires to present as MINIMAL JSON (strongly discouraged, but allowed).  MINIMAL JSON itself is a valid value within TJSON - MINIMAL means it contains no whitespace of any kind (aside from within double quoted strings of course in which case it is data), to include no real newline characters (real newline chars are not allowed in JSON anyway, so this is not an additional restriction).  Implementors should not actually generate MINIMAL JSON inside TJSON almost ever, but it is available as a last-ditch fallback if nothing else seems reasonable.
+This allows nonempty objects and non-empty arrays only as all simpler JSON values without extra whitespace are already also simple TJSON values already and require no additional restrictions or rules to support.  This section only applies to nonempty objects and arrays that the generator desires to present as MINIMAL JSON (strongly discouraged, but allowed).  MINIMAL JSON itself is a valid value within TJSON - MINIMAL means it contains no whitespace of any kind (aside from within double quoted strings of course in which case it is data), to include no real newline characters (real newline chars are not allowed in JSON anyway, so this is not an additional restriction).  Implementors should not actually generate MINIMAL JSON inside TJSON almost ever, but it is available as a last-ditch fallback if nothing else seems reasonable.
 
-MINIMAL JSON MUST NEVER be wrapped or folded, and MUST NEVER be packed in a TJSON line with any other value (not be packed in the sense of TJSON packing it with other items in the same object or array on the same line, it's required to be packed as far as no intermediate whitespace within the MINIMAL JSON itself) and can be detected with its opening `{[^} ]` or `[[^] ]` immediately after the indent level by the parser.  It ends at the end of the line, valid or not.  If it isn't valid, that's an error.  All the basic json values work as is, and objects and arrays can be placed in there in MINIMAL JSON format if necessary - but this is almost never a good idea.  All the simple json values (not nonempty object, not nonempty array) are also TJSON values, so no special provision needs to be made for those.
+MINIMAL JSON MUST NEVER be wrapped or folded, and MUST NEVER be packed in a TJSON line with any other value (not be packed in the sense of TJSON packing it with other items in the same object or array on the same line, it's required to be packed as far as no intermediate whitespace within the MINIMAL JSON itself) and can be detected with its opening `{[^} ]` or `[[^] ]` immediately after the indent level by the parser.  It ends at the end of the line, valid or not.  If it isn't valid, that's an error.  All the basic JSON values work as is, and objects and arrays can be placed in there in MINIMAL JSON format if necessary - but this is almost never a good idea.  All the simple JSON values (not nonempty object, not nonempty array) are also TJSON values, so no special provision needs to be made for those.
 
 While producing TJSON containing MINIMAL JSON is strongly discouraged, it might be the least bad option for some implementations in some situations.  An example might be a single string within a 500 deep nested single element array or something similarly bizarre.  That's going to look like garbage no matter what you do, and TJSON containing MINIMAL JSON might be the best answer in some cases.
 
@@ -1515,7 +1513,7 @@ Not coincidentally, when you print a table that's the root element it ends up lo
 ```
 
 THEORY BEHIND ABOVE EXAMPLE:
-we reset n to 0, so now all we have to do is show the table json `[{....}]` at n=0, table gets shown starting at the indent level inside the surrounding array (the same level as the one at which we start the contained objects) not at the indent level before of the surrounding array, so we are effectively at n>=2 so we can fold within it if we have to.  Note that the table lines of the TJSON at EXACTLY the same visible indent as they would be if we just outputted the array of objects part of the above example as the root node of its own example.  This is not a coincidence, it must be this way to keep logical coherence.  This is the furthest left a table can possibly be shown - it would be at the same visible indent level if it were the root node.
+we reset n to 0, so now all we have to do is show the table JSON `[{....}]` at n=0, table gets shown starting at the indent level inside the surrounding array (the same level as the one at which we start the contained objects) not at the indent level before of the surrounding array, so we are effectively at n>=2 so we can fold within it if we have to.  Note that the table lines of the TJSON at EXACTLY the same visible indent as they would be if we just outputted the array of objects part of the above example as the root node of its own example.  This is not a coincidence, it must be this way to keep logical coherence.  This is the furthest left a table can possibly be shown - it would be at the same visible indent level if it were the root node.
 
 **Example: ending glyph optional when no more data follows** (allowed but not required to include closing `/>`)
 
@@ -1592,7 +1590,7 @@ Here are the preferences for CANONICAL TJSON:
 
 - Width is infinite (not the default)
 - MINIMAL JSON is never used (the default)
-- BARE KEYS (bare json object keys) are always used when allowed (the default)
+- BARE KEYS (bare JSON object keys) are always used when allowed (the default)
 - BARE STRINGS are always used when allowed (the default)
 - MULTILINE STRINGS are not allowed (not the default)  (multiline requires at least one EOL inside the string, the default is to prefer MULTILINE strings for sufficiently long data that looks like text)
 - double-quoted strings are the only allowed fallback for when BARE STRINGS are not allowed.
@@ -1604,3 +1602,9 @@ Here are the preferences for CANONICAL TJSON:
 - TABLES are forbidden (tables are great though, so implementations shouldn't default to CANONICAL TJSON if they don't need to have the highest possible line by line diff consistency, also not the default, but does have the secondary advantage of using slightly fewer cpu cycles)
 
 Following the preferences above creates CANONICAL TJSON - actual implementations will often want to prefer one line arrays (partial, or perhaps for the whole array) and one line objects (partial, or for the whole object) where keys and values are short and there are not too many of them.  Canonical representation chooses multiline arrays and multiline objects because there is only one way to do a purely multiline array or object.
+
+---
+
+## SPECIFICATION CONSISTENCY
+
+THIS IS THE SPECIFICATION: A future formal RFC type spec should be derived from this - it's supposed to be more parseable by LLMs and such - but if there is any difference in the rules whatsoever (and there shouldn't be), the RFC type document is the bug, not this.  Any underspecification here specified in a future RFC document is a bug there for specifying something there that's not defined or logically and necessarily implied here, and a bug here for not specifying it, as underspecification here is pointed out explicitly.
