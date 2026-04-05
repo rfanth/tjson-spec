@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.3.1
+# Text Json (TJSON) Specification v0.3.2
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -93,6 +93,8 @@ There is only one root level value in TJSON at indent 0.  More than one is not a
 INCOMING UNESCAPED WINDOWS TYPE CRLF AND UNESCAPED LF ARE BOTH TREATED AS EOL, even in the same file.  A bare CR (carriage return not followed by LF) is a parse error - our parser should never see a bare CR.  If it does, that's an error.  TAB characters are only allowed as literal content inside multiline strings. A tab anywhere else is a parse error.  Implementors may choose to avoid multiline strings that contain tabs and make them regular JSON strings instead.
 
 WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incompatible with your use case or the user specifically requests otherwise through an option, in which case CRLF is EOL instead.  No other EOL's are allowed.
+
+TJSON HAS NO EMPTY LINES WITHIN IT, ASIDE FROM WITHIN TRANSPARENT TYPE MULTILINE STRINGS (transparent multiline strings can contain empty lines; the bold multiline can't ever be an empty line because of the initial `|`, and the minimal can't because the interior of the string is at n+2, so you are guaranteed at least two spaces at the start).
 
 ### Generator Options
 
@@ -360,9 +362,15 @@ LOGIC: we are folding, so indent n+2, JSON strings cannot contain a real LF, so 
 
 We have three versions of multiline string starter glyphs, for different situations.  Note that all forms start with a space before the first backtick, just like a bare string.  A bare string cannot start with a backtick rendering this unambiguous to the parser.
 
-First, is the unguarded start of line ` ``` `, second the pipe guarded ` `` ` (body guarded with `| ` within the end of the indent can go at n indent or n - any even number indent but not less than 2 to make room for `| `), and the third is the unguarded normal indent `` ` `` that cannot manipulate n indent rules like the other types.
+We will give each of these three versions useful shorthand names.
 
-All three forms can have the optional `\r\n` or `\n` or nothing as part of the starting glyph at the end of the glyph.  Whatever form of the starting glyph, the ending glyph must match it exactly and be at the starting unmanipulated logical n indent.  For all three ` ``` ` ` `` ` and `` ` `` forms, the ending glyph is REQUIRED.  It's especially important to preserve the ending glyph if you change the indent on a ` `` ` type.  The purpose of this is in order to draw the reader's eye back to the indent level at the end because we changed it.
+The triple backtick form, we call TRANSPARENT multiline strings, the unguarded ` ``` `.  We call it transparent because if you started looking at it mid way through, you would have no way to tell that you were not looking at the original document, as it has no indent, and no guard on the intermediate lines between the starting and ending glyphs.  This makes it very easy to look at, but occasionally confusing depending on the content of the document.  A document that contained TJSON itself, while it would still parse, would likely mislead the reader.  Also, a document that happened to contain an ending glyph of this type would fail to parse correctly, and as such generators must check that the document itself does not have such a line in it before choosing this form.
+
+The double backtick form, we call BOLD multiline strings, the pipe guarded ` `` `.  The body is guarded on each intermediate line with a `| ` within the last two characters of the indent.  The indent can either go at its natural indent level n, or it can go at any even number between n and 2, inclusive.  We can't go below n=2 within the multiline to make room for `| `.  n=2 within the multiline is exactly how it would display if the string were the root node of the document.  We call it bold because the leading pipe makes it extra prominent to the eye.  This also makes it a safe way to encapsulate otherwise confusing text.  The encapsulation also makes it useful in situations where you might need to encapsulate something that looks vaguely like TJSON, or when you might not want an interior empty line under any circumstances.  Bold is ideal for logging scenarios, and is generally the safest choice of the three.
+
+The single backtick form, we call MINIMAL multiline strings, the unguarded normal indent `` ` ``.  This form cannot change the visible indent, unlike the other two types.  We call it minimal both because it is minimally obtrusive to the eye, and because it does the least as far as its ability to break normal parsing rules.  It's particularly good for short multilines, though the choice is left up to the generator.  Because of the guaranteed lesser indent of the ending glyph, this form can contain anything without parsing ambiguity.
+
+All three multiline string forms can have an optional `\r\n` or `\n` or nothing as part of the starting glyph at the end of the glyph.  Whatever form of the starting glyph, the ending glyph must match it exactly and be at the starting unmanipulated logical n indent.  For all three ` ``` ` TRANSPARENT, ` `` ` BOLD and `` ` `` MINIMAL forms, the ending glyph is REQUIRED, and it is REQUIRED to be at the proper indent.  Any other indent, higher or lower, is a parse error.  This rule is especially important from a reading perspective to preserve the ending glyph if you change the indent; we need to draw the reader's eye back to the correct indent level at the end so that they can continue reading without becoming disoriented after the multiline ends.
 
 Our starting glyph (the glyph includes the space at the start) is: `` ' `{1,3}(\\n|\\r\\n)?' `` EOL (+2 space indent until just before the ending glyph line) (though ` `` ` can and ` ``` ` must manipulate the indent level between the start and end glyph as defined below), the actual string data being displayed MUST contain at least one linefeed, and the final newline after we are done showing our MULTILINE STRING is at the original indent before we started and is not part of the string, ends when we see a final EOL followed by n spaces and our starting glyph including its leading space.  This is unparseable for ` ``` ` if the document contains that sequence, so another form of string (` `` ` is pretty good here, but you can fall back to a non MULTILINE STRING too) must be used instead.
 
@@ -384,7 +392,7 @@ A document consisting only of a root node of a single MULTILINE STRING cannot us
 
 The closing glyph must always exactly match the opening glyph (including its leading space), with exactly n spaces of indent before it, whether or not the opening glyph was pushed over by being packed on the same line with something else.  The closing glyph is always mandatory.
 
-**Sample: ` ``` ` form (unguarded, full-width), inline with key, LF document inside CRLF string**
+**Sample: ` ``` ` TRANSPARENT form (unguarded, full-width), inline with key, LF document inside CRLF string**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -392,7 +400,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
 ```
   thisisabarekey: ```\r\n
-This is an unmarked MULTILINE STRING the T in this is the first character in the string
+This is a TRANSPARENT MULTILINE STRING the T in this is the first character in the string
 The opener here is pushed to the right from the normal indent level by the bare key.  The implementor could have chosen to move it to the next line like the next example, but did not.
 Note that the closer is at the logical n indent level we started, not at the level the opening glyph got pushed to by the bare key.
 Folding is totally prohibited here no matter what.  There is no allowed way to fold in this type of multiline string no matter how long the lines get.
@@ -403,7 +411,7 @@ The last character in this MULTILINE STRING is a capital A
    ```\r\n
 ```
 
-**Sample: ` ``` ` form (unguarded, full-width), value on next line, LF string**
+**Sample: ` ``` ` TRANSPARENT form (unguarded, full-width), value on next line, LF string**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -412,7 +420,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
   thisisabarekey:
    ```\n
-This is an unmarked MULTILINE STRING the T in this is the first character in the string
+This is a TRANSPARENT MULTILINE STRING the T in this is the first character in the string
 Folding is totally prohibited here no matter what.  There is no allowed way to fold in this type of multiline string no matter how long the lines get.
 We start on the very first character of the line no matter how high n was when we started
 We end with a newline, indent to old n indent depth and repeat the starting glyph to indicate the end.
@@ -421,7 +429,7 @@ The last character in this MULTILINE STRING is a capital A
    ```\n
 ```
 
-**Sample: ` ``` ` form (unguarded, full-width), as first element of array**
+**Sample: ` ``` ` TRANSPARENT form (unguarded, full-width), as first element of array**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -429,7 +437,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
 ````
    ```
-This is an unmarked MULTILINE STRING the T in this is the first character in the string
+This is a TRANSPARENT MULTILINE STRING the T in this is the first character in the string
 Folding is totally prohibited here no matter what.  There is no allowed way to fold in this type of multiline string no matter how long the lines get.
 We start on the very first character of the line no matter how high n was when we started
 We end with a newline, indent to old n indent depth and repeat the starting glyph to indicate the end.
@@ -439,7 +447,7 @@ The last character in this MULTILINE STRING is a capital A
   3
 ````
 
-**Sample: ` `` ` form (pipe-guarded), same indent as surrounding array**
+**Sample: ` `` ` BOLD form (pipe-guarded), same indent as surrounding array**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -447,7 +455,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
 ```
    ``
-  | This is a MARKED MULTILINE STRING the T in this is the first character in the string.
+  | This is a BOLD MULTILINE STRING the T in this is the first character in the string.
   | Notice we only use two backticks for this type of multiline string with a starting pipe.
   | Because it's guarded by a starting pipe, we can subtract 0 or any even number of indent n in the middle, or just leave it at the same indent.
   | This one is left at the same indent.  Backing up the indent an odd number would be FORBIDDEN.
@@ -464,7 +472,7 @@ JSON (it's long so most of it omitted in favor of ...)
   3
 ```
 
-**Sample: ` `` ` form (pipe-guarded), backed up to minimum indent, CRLF string**
+**Sample: ` `` ` BOLD form (pipe-guarded), backed up to minimum indent, CRLF string**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -472,7 +480,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
 ```
    ``\r\n
-| This is a MARKED MULTILINE STRING the T in this is the first character in the string.
+| This is a BOLD MULTILINE STRING the T in this is the first character in the string.
 | Notice we only use two backticks for this type of multiline string with a starting pipe.
 | Because it's guarded by a starting pipe, we can subtract 0 or any even number of indent n in the middle, or just leave it at the same indent.
 | This one is backed up as far as possible, to 2 indent.  We need at least 2 indent to hold the '| ' or '/ ' depending on if we folded or not.
@@ -490,7 +498,7 @@ JSON (it's long so most of it omitted in favor of ...)
   3
 ```
 
-**Sample: `` ` `` form (single backtick, indented, no pipe)**
+**Sample: `` ` `` MINIMAL form (single backtick, indented, no pipe)**
 
 JSON (it's long so most of it omitted in favor of ...)
 ```json
@@ -498,7 +506,7 @@ JSON (it's long so most of it omitted in favor of ...)
 ```
 ```
    `
-    This is an unmarked MULTILINE STRING the T in this is the first character in the string.
+    This is a MINIMAL MULTILINE STRING the T in this is the first character in the string.
     Notice we only use one backtick for this type of multiline string with no starting pipe.
     It's ok if the multiline string itself contains backticks like this ` or `\r\n or `\n, because it's required to be indented normally so we can tell where the start is when parsing.
     Folding is ok, here's how we do it. This is the allowed way to fold in this type of multiline
@@ -1385,17 +1393,26 @@ JSON version:
 {"tjson_key":[[{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]]}
 ```
 
+*(Forbidden — MINIMAL JSON is not on its own line)*
+```
+  tjson_key:[{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]
+```
+
+**Example: TJSON containing not-quite minimal MINIMAL JSON**
+
 *(Forbidden — not minimal: there is non-data whitespace in the JSON before null, and also forbidden independently because there is non-data whitespace after the comma near the end)*
 ```
   [{"a ":{"b": null,"c":"ab cd","d":3}}, {"a":true}]
 ```
+
+**Bad Examples: TJSON containing MINIMAL JSON (one array layer is in the TJSON, with an additional true in the TJSON array)**
 
 *(Forbidden — it's packed)*
 ```
   true  [{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]
 ```
 
-*(Forbidden — it's packed, and because it's not at the end of the line)*
+*(Forbidden because it's packed, and independently forbidden because it's not at the end of the line)*
 ```
   [{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}], true
 ```
@@ -1407,9 +1424,11 @@ JSON version:
 
 *(Forbidden — it's wrapped)*
 ```
-  true, [{"a ":{"b":null,"c":"ab cd","d":3}}
+  true
+  [{"a ":{"b":null,"c":"ab cd","d":3}}
   / ,{"a":true}]
 ```
+
 
 ### Visible Indent Level Adjustment Glyphs
 

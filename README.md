@@ -8,6 +8,8 @@ Humans read from screens in squares.  Computers read character by character, ign
 
 The full specification is in [tjson-specification.md](tjson-specification.md).
 
+TJSON Lines is coming, but I have a stub here so everyone knows where this is going, and you can use it today [tjson-lines-specification.md](tjson-lines-specification.md).
+
 ## Reference Implementation
 
 [TJSON reference implementation written in Rust](https://github.com/rfanth/tjson/)
