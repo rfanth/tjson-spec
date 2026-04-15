@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.4.0
+# Text Json (TJSON) Specification v0.4.1
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -1004,7 +1004,7 @@ As is rarely the case in TJSON, there is exactly one type after every value, a k
 
 We default to 4 spaces, but we allow any even number of spaces that is at least two.  Why only even numbers?  Well we might want to parse odd numbers > 2 for ease of editing, but we should never produce them.  Three spaces looks too much like space packing of bare strings, or an array with an initial element that is a bare string - not that it's logically the same of course, but we want to reserve that space in the user's brain that three space look for only certain things.  So a generator should NEVER produce 3 spaces between packed key:value pairs.  A parser is allowed to accept three, but isn't required to.  The reason a parser might want to accept three is because a hand edit might make that mistake and beyond at least two, it isn't really something we have to enforce to ensure parsability.  If a user does that, and a parser chooses to accept it, and tries to write something out, it should NEVER try to preserve the 3 spaces.  Similarly, if a parser decides to accept less spaces than two in a corner case where it doesn't create parse ambiguity, it should never try to preserve the incorrect spacing.
 
-A higher odd number of spaces (5 or more) are far less dangerous, but still damages the visual cadence of TJSON with no real benefit, so we are strongly recommending that generators not produce odd spacings at five or above.  If you have a specific generator with a specific reason, an attempt to align keys on different rows for example, or a very high odd spacing (7, 9, 11, 13, etc.) meant to right justify a value, it might make sense to go against this recommendation.
+A higher odd number of spaces (5 or more) are far less dangerous, but still damages the visual cadence of TJSON with no real benefit, so we are strongly recommending that generators not produce odd spacings at five or above.  If you have a specific generator with a specific reason, an attempt to align keys on different rows for example, or a very high odd spacing (7, 9, 11, 13, etc.) meant to right justify a value, it might make sense to go against this recommendation.  The entire point is to allow generators opportunities to make things more readable, and aligning keys on various lines is a good reason, but don't go below 4 spaces between key value pairs to do it.
 
 Zero or one space between kv pairs is usually going to be ambiguous to parse as the value is often a bare string, so we have to forbid generating anything under 2 in all circumstances.  We should never successfully parse anything under two spaces here, even if the previous value would allow it without ambiguity.
 
@@ -1027,6 +1027,18 @@ Four spaces is a better default than two because two spaces are used for so many
     nestedkey: value4  nestedkey2: value5  nestedkey3: value6
     // line above is parsable kv pack separation of 2 spaces, but tougher to read
 ```
+
+**Example: Key-value packing (kvPackMultiple 2, 4 spaces, the default, but with extra spaces opportunistically added by the generator for alignment after Bob)**
+```
+  // note that we have extra spaces between Bob and age, and that we do not go below 4 spaces in between.  This is a good reason to break the spacing recommendations above.
+  // we can't make this a table because of different keys, but a generator is allowed to add extra spaces in between to align it.  This is easy to parse and looks good.
+  // The keys are intentionally different to prevent table rendering in this example.
+  team:
+  [ { namea: Alice    agea:30    rolea: admin
+    { nameb: Bob      ageb:25    roleb: user
+    { namec: Carol    agec:35    rolec: user
+```
+
 **Example: multiline string and inline packing (width = 40 (default is 80), multiline folding is off (the default), we are preferring commas for packing arrays over spaces (the default), string folding auto (the default), and kvPackMultiple 2 (default is 2, this means four spaces between packed key values))**
 ```
 // this first line is a key value pack with a kv spacing of 4 (kv pack multiple of 2, the default)
