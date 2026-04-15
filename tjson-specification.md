@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.3.3
+# Text Json (TJSON) Specification v0.4.0
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -61,7 +61,7 @@ I expect there are also going to be other use cases I can't foresee right now, a
 
 4) Making changes in the specification of the format to make code run more efficiently, or to make it fit some theoretical computer science grammar category.  This is for humans first, and computers are fast, it's ok if the code has to work a little harder to make it readable.  We do try to keep the code as fast as possible given the human first constraint, and we have a Rust implementation, so the performance is there.
 
-5) Specifying folding rules to stay within pathologically small fixed width values, or for where the indent level n is almost the same as width (an indent glyph is provided to avoid the indent level getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accomodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
+5) Specifying folding rules to stay within pathologically small fixed width values, or for where the indent level n is almost the same as width (an indent glyph is provided to avoid the indent level getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accommodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
 
 6) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
 
@@ -223,6 +223,13 @@ Strings can have a variety of formats and this is intentional.  The default favo
 A BARE STRING cannot start or end with space, and cannot have whitespace at all other than non-consecutive regular spaces internally.  No space space allowed, multiple spaces are fine as long as they aren't at the ends and aren't next to each other.  A BARE STRING also cannot start or end with quote characters of any kind (``[\p{Quotation_Mark}`]``, to include backtick (U+0060)), and cannot start or end with comma-like characters (`[,\uFF0C\uFE50]` — ASCII comma U+002C, fullwidth comma U+FF0C, small comma U+FE50).  This is to avoid the user thinking something is quoted or in an inline array when it isn't.  A BARE STRING also cannot start with a `/`, to avoid looking like a comment or a fold marker when it is not.  A BARE STRING also cannot start with a `|` pipe or PIPELIKE CHARACTER, to avoid it looking like the start of a table line or a MULTILINE STRING when it is not.  Implementations may want more exclusions than these, they are not required to represent anything as a bare string, but they do need to be able to parse it.  The whole reason we have bare strings is to make them readable.  Except for our regular space (U+0020) rules above, control characters, invisible characters, composed characters (the problem there is not that they are composed, but that when you see a character in a bare string you can't even theoretically know its unicode representation anymore by looking at it, by restricting it to the single character only representation, now we can at least theoretically know) and other weird characters are forbidden (`[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`).  We intentionally allow emojis with exactly one bare string representation, this is not a mistake.  It's ok for programs that create TJSON to be more strict than this even by default (it's pretty generous, deterministic emojis for example) and fall back to a JSON string with some of the characters allowed by this rule, but they can't be less strict.  Unfortunately, excluding `\p{M}` does exclude certain languages, but I think the risk of hiding data is too great.  If a particular user spoke Tamil or Arabic and was willing to accept the risk internally, they might write their own producer that allows some of this anyway, and others would be able to parse it, but don't do this with any TJSON you aren't planning to consume exclusively locally, as it is not compliant.  We do allow parsing of unescaped characters as we would have allowed parsing it anyway if it was escaped properly.  However, the limitations on the first character regarding quote characters of any kind, `/`, and comma like characters; and any of the regular space rules in the entire bare string should be a parse error.
 
 Parsers are allowed to have a strict mode that rejects any unescaped character that is not allowed to be produced by the spec, and for a parser that only works in a certain context, a parser might choose to reject those characters entirely.  (A high security context for instance.)  If a parser chooses to do this by default it should inform the user if practicable that it is parsing in strict mode or similar by default.  A parser might also choose to add security features and refuse to ingest certain things entirely escaped or otherwise, but that is not specification compliant, and should probably be done at the data layer rather than in the parser itself, at least logically, as it's doing two things, being a TJSON parser, and a security layer, not just being a TJSON parser.
+
+#### Additional Bare String Rule for Tables Only
+
+A generator is FORBIDDEN from producing a bare string that contains a `|` character within a table.  Generators should also avoid pipelike characters within a bare string in a table but this is a recommendation not a hard rule as it is not parse critical.  We want to be able to deterministically parse tables with insufficient padding, and having a hard rule on this allows us to do that.  It also allows special purpose generators to break padding rules without a parse failure if it makes sense for their use case, and provides assistance to people editing by hand.  We sacrifice bare strings in tables containing `|` to padding flexibility because bare string `|` is likely to be confusing, and insufficient padding is unlikely to be confusing.
+
+A bare key in a table may not contain a pipe anywhere within it.  A bare key already is forbidden from containing a pipe generally, but if we ever allowed it in other circumstances, we would not allow it within a table.
+
 
 String: (this is a BARE STRING, the main and preferred string type) space almost-anything-see-above space space
 ```
@@ -602,6 +609,7 @@ reallylong
 ### Packing
 
 Packing is pushing additional values on the same line as another value, either elements of an array, or key value pairs in an object.
+We forbid packing key value pairs in an object on the same line as the parent key - it's just too confusing as a key value pair is not a simple type and it almost feels like an array.  We do sometimes pack an array with simple types only on the same line as a parent key as shown below.
 Packing is optional, and it's ok to pack even if the first element doesn't pack - this is within spec - the point is for generators to use the breathing room in the spec to generate easy to read text without violating the spec.
 
 **Example:** `[1,2,3]`
@@ -627,7 +635,7 @@ Packing is optional, and it's ok to pack even if the first element doesn't pack 
 {"A":1, "B":2, "C":3}
 ```
 ```
-  A:1  B:2  C:3
+  A:1    B:2    C:3
   // This is packing too, and even though they aren't strings, due to the keys, they can be safely packed with spaces, so this is ok.
 ```
 ```
@@ -649,18 +657,15 @@ Packing is optional, and it's ok to pack even if the first element doesn't pack 
   // This is not packed.
 ```
 ```
-  X:  A:1  B:2  C:3
+  X:
+    A:1    B:2    C:3
   // This is packed, and looks pretty good.
 ```
-```
-  X:
-    A:1  B:2  C:3
-  // This is packed, but differently, and also looks pretty good.
-```
+***Example (not allowed):***
 ```
   X:  A:1
-    B:2  C:3
-  // This is packed, and parseable, but may be ugly because we are both packing on the same line as the parent key and on the next line at the same time - implementors can use their judgement.  In general, it's better looking not to pack on the same line as the parent key unless you are putting the whole thing on that line, but it is more compact which may be more important.
+    B:2    C:3
+  // This is FORBIDDEN.  This is packed, and might theoretically be parseable, but is confusing because an object with kv pairs is just too complex for this type of treatment. This type of packing is still legal with arrays containing only basic types (an object key value pair is not a basic type).  In general, it's better looking not to pack on the same line as the parent key unless you are putting the whole thing on that line, but it is more compact which may be more important.
 ```
 
 **Example:** `{"A":[1,2,3,4,5,6,7,8,9,10,11]}`
@@ -991,9 +996,41 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
     o3: o3value
 ```
 
-**Example: multiline string and inline packing (width = 40 (default is 80), multiline folding is off (the default), we are preferring commas for packing arrays over spaces (the default), string folding auto (the default))**
+### KEY-VALUE PACKING 
+
+WARNING:  Key value packing spacing other than 4 is experimental and subject to change.  If it changes it's going to get tighter, not looser than listed below.
+
+As is rarely the case in TJSON, there is exactly one type after every value, a key (always a string, usually expressed as a bare key).  Parsing does not require tightly policing the number of spaces between a key: value pair and the next key: value pair on the same line.  Still, visual perception demands some restrictions.
+
+We default to 4 spaces, but we allow any even number of spaces that is at least two.  Why only even numbers?  Well we might want to parse odd numbers > 2 for ease of editing, but we should never produce them.  Three spaces looks too much like space packing of bare strings, or an array with an initial element that is a bare string - not that it's logically the same of course, but we want to reserve that space in the user's brain that three space look for only certain things.  So a generator should NEVER produce 3 spaces between packed key:value pairs.  A parser is allowed to accept three, but isn't required to.  The reason a parser might want to accept three is because a hand edit might make that mistake and beyond at least two, it isn't really something we have to enforce to ensure parsability.  If a user does that, and a parser chooses to accept it, and tries to write something out, it should NEVER try to preserve the 3 spaces.  Similarly, if a parser decides to accept less spaces than two in a corner case where it doesn't create parse ambiguity, it should never try to preserve the incorrect spacing.
+
+A higher odd number of spaces (5 or more) are far less dangerous, but still damages the visual cadence of TJSON with no real benefit, so we are strongly recommending that generators not produce odd spacings at five or above.  If you have a specific generator with a specific reason, an attempt to align keys on different rows for example, or a very high odd spacing (7, 9, 11, 13, etc.) meant to right justify a value, it might make sense to go against this recommendation.
+
+Zero or one space between kv pairs is usually going to be ambiguous to parse as the value is often a bare string, so we have to forbid generating anything under 2 in all circumstances.  We should never successfully parse anything under two spaces here, even if the previous value would allow it without ambiguity.
+
+Four spaces is a better default than two because two spaces are used for so many other things, and it makes many kv pairs on a line much easier to read.  After some time, it will subconciously indicate packed kv pairs to the user.
+
+**Example: Key-value packing (kvPackMultiple 2, 4 spaces, the default)**
 ```
-  a:5  6: fred
+  key:   value1 with space   value2 with space   value3 with space
+  key2arrayofnumbers:  1, 2, 3, 4, 5, 6, 7, 8
+  key3nestedobject4space:
+    nestedkey: value4    nestedkey2: value5    nestedkey3: value6
+    // line above is easier to read kv pack separation of 4 spaces
+```
+
+**Example: Key-value packing (kvPackMultiple 1, 2 spaces, not the default)**
+```
+  key:   value1 with space   value2 with space   value3 with space
+  key2arrayofnumbers:  1, 2, 3, 4, 5, 6, 7, 8
+  key3nestedobject2space:
+    nestedkey: value4  nestedkey2: value5  nestedkey3: value6
+    // line above is parsable kv pack separation of 2 spaces, but tougher to read
+```
+**Example: multiline string and inline packing (width = 40 (default is 80), multiline folding is off (the default), we are preferring commas for packing arrays over spaces (the default), string folding auto (the default), and kvPackMultiple 2 (default is 2, this means four spaces between packed key values))**
+```
+// this first line is a key value pack with a kv spacing of 4 (kv pack multiple of 2, the default)
+  a:5    6: fred
   obj:
     o1:8
     o2:
@@ -1021,7 +1058,8 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
     // here we can fit everything on the same line with o5, without running into width, so we do.
     o5:   arraystring5,  arraystring6
   obj2usinginlineformatsometimes:
-    o1: str1  o2: str2  o3:-9  o4:10e3
+    o1: str1    o2: str2    o3:-9    o4:10e3
+    // the line above is a key value pack with a kv spacing of 4 (kv pack multiple of 2, the default)
     o5: this one is super duper long it
     /  is a basic value a bare string
     /  folding it is our only option it
@@ -1031,7 +1069,8 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
     /  must be alone.
     o6: longerstr3withitsownline
     o7: longerstr4withitsownline
-    o8: str5  o9: str6  o10:-18
+    // this next line is a key value pack, with kv spacing of 4 (kv pack multiple of 2, the default)
+    o8: str5    o9: str6    o10:-18
 ```
 
 ### Basic Examples
@@ -1202,8 +1241,10 @@ If you want to fold in a table, it's usually better to let the line run long pas
 [ |a        |b        |c        |d        |E       |
   |1        | xyz     | def     | yyy     |5       |
   | 12      |14       |null     | yxx     |        |
-  |true     |14       |         |         | yxx THIS
-/  IS REALLY LONG  |
+  |true     |14       |         |         |"yxx THIS
+/  IS REALLY LONG AND CONTAINS A PIPE | SO WE MUST
+/  DOUBLE QUOTE IT FOLDED OR NOT BECAUSE IT IS IN A
+/  TABLE"  |
 ```
 
 **Example: folding the header row is valid, but not default and probably a really bad idea**
@@ -1583,7 +1624,7 @@ Indent level adjustment glyphs are in some ways contrary to the goals of the pro
 
 In certain circumstances, such as tables, using indent adjustment glyphs by default before and after enhances readability by forcing the table to the left side of the reading area where the user might expect to find a table, creates room for additional data, and has only a small impact on positional awareness as long as we reliably adjust indent before and after the table.  This should feel familiar to a reader that also looks at ``` and left indented `` multiline strings, as it is more likely to feel like a display method for a field rather than an indent level, even if it is not necessarily that on a syntax or parsing level.
 
-Adjusting the indent level for more than just the duration of a table or a multiline string in order to accomodate deeply indented trees is inherently more hazardous to the locality of the viewing experience, even though it may be necessary.  As such, generators may choose to, but need not, add comments near the indent level adjustment to orient the reader.  The form that these comments might take, or whether to generate them at all is left up to the generator, but I would suggest something like this to tell the user what visible indent level means if that is important to your application.  For many purposes, perhaps most, the reader may be less interested in the exact depth,and comments may be better omitted.  This commenting idea is not part of the rules of the specification, it is just a helpful note to remind generators that they can use comments to orient the reader, particularly when the generator is forced to do something disorienting to the reader.
+Adjusting the indent level for more than just the duration of a table or a multiline string in order to accommodate deeply indented trees is inherently more hazardous to the locality of the viewing experience, even though it may be necessary.  As such, generators may choose to, but need not, add comments near the indent level adjustment to orient the reader.  The form that these comments might take, or whether to generate them at all is left up to the generator, but I would suggest something like this to tell the user what visible indent level means if that is important to your application.  For many purposes, perhaps most, the reader may be less interested in the exact depth, and comments may be better omitted.  This commenting idea is not part of the rules of the specification, it is just a helpful note to remind generators that they can use comments to orient the reader, particularly when the generator is forced to do something disorienting to the reader.
 
 Comments must always be ignored by parsers.  The comments below are purely optional, and may, or may not be generated purely to orient the reader, in this case as to the actual n indent level of visible n=0.  Generators are allowed to add as many or as few comments as they like, to anything, for any reason, but hopefully with the goal of improving the reading experience.  As always, comments MUST be on their own line as required by the specification.
 
