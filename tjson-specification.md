@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.4.1
+# Text Json (TJSON) Specification v0.4.2
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -590,20 +590,20 @@ TJSON MUST preserve key order exactly as emitted.
 
 TJSON also MAY preserve duplicate keys (as JSON technically permits them) - key order MUST be preserved and duplicates MAY be passed through faithfully and it is the consumer's responsibility to handle them.  Many actual platforms cannot track duplicate keys anyway, making it tough to implement and unnecessary, so it's acceptable to fall back to JSON type real-world duplicate key behavior and do something platform-dependent here.  The ideal TJSON implementation should keep duplicate keys, and keep them in the original order.  This is a should, not a must.  If your platform's normal JSON type implementation and data structures support duplicate keys, you really should preserve duplicate keys.
 
-**Example: key fold (with ludicrously short -w)**
+**Example: key fold (with ludicrously short -w, shorter than we would actually allow)**
 
-JSON: `{"reallylongobjectkey":3}`
+JSON: `{"areallylongobjectkey":3}`
 ```
-reallylong
-/ objectkey:
-  3
+  areallylong
+  / objectkey:
+  / 3
 ```
 
-**Example: key fold, non-default forbid-bare-keys option**
+**Example: key fold, non-default forbid-bare-keys option (with ludicrously short -w, shorter than we would actually allow)**
 ```
-"reallylong
-/ objectkey":
-  3
+  "areallylong
+  / objectkey":
+  / 3
 ```
 
 ### Packing
@@ -1195,13 +1195,15 @@ Uneven and ugly padding is not desirable, and generators should mostly not produ
   |true     |14                                |         |         | yxx  |
 ```
 
-### Folding Within a Table
+### Folding Within a Table  **Experimental and Optional - Not fully implemented, and subject to change**
 
 FOLDING WITHIN A TABLE - This is turned off by default, and is almost always a bad idea.  Folding in a table is just like folding other places.
 
-A table may also fold lines, and if it does it will have a fold marker on the folded lines.  The fold marker goes inside the table's array level indent, one space before the end.  This means that any fold markers will be aligned two characters to the left of the opening `|` on each line.  (The example helps a lot to understand this one.)
+Logically, a table row is a special case way of rendering an entire object at once.  As such, if a line is folded, it should be folded at the level of the object itself, not the members of the object, or the surrounding array.
 
-In non table contexts, there is a guaranteed space after the fold marker because it is placed within the margin, which is also the case here.  The reference implementation doesn't generate folded table lines by default, and other implementations do not have to generate this, but all implementations do have to correctly parse it.
+A table may also fold lines, and if it does it will have a fold marker on the folded lines.  The fold marker `/ ` aligns with the opening `|` on each line.  This works very much like a fold of an object key with an inline simple value.  (The example below helps a lot to understand this one.)
+
+In non table contexts, there is a guaranteed space after the fold marker because it is placed within the margin, and we also have a non-data space after the `/` here.  The reference implementation doesn't generate folded table lines by default, and other implementations do not have to generate this, but all implementations do have to correctly parse it.
 
 Folding is allowed only within optional extra right padding (probably better looking) and between the first data character (this would be the a in both the JSON double quoted `|"abc"` and the bare string `| abc`) and the last data character of the string that follows the table `|`.  This is exactly like the rules for string folding intentionally.  Number folding follows the same rule.
 
@@ -1219,7 +1221,7 @@ If you want to fold in a table, it's usually better to let the line run long pas
   |a        |b        |c        |d        |E     |
   |1        | xyz     | def     | yyy     |5     |
   | 12      |14       |null     | yxx REALLYGOTTAH
-/ AVEITABSOLUTELYMUSTFOLDFORSOMEREASON  ||
+  / AVEITABSOLUTELYMUSTFOLDFORSOMEREASON  ||
   |true     |14       |         |         | yxx  |
 ```
 
@@ -1227,11 +1229,11 @@ If you want to fold in a table, it's usually better to let the line run long pas
 ```
   |a        |b        |c        |d        |E     |
   |1        | xyz     | def     |
-/ yyy     |5     |
+  / yyy     |5     |
   | 12      |14       |null     |
-/  yxx REALLYGOTTAH
-/ AVEITABSOLUTELYMUSTFOLDFORSOMEREASON     |
-/       |
+  /  yxx REALLYGOTTAH
+  / AVEITABSOLUTELYMUSTFOLDFORSOMEREASON     |
+  /       |
   |true     |14       |         |         | yxx  |
 ```
 
@@ -1245,7 +1247,7 @@ If you want to fold in a table, it's usually better to let the line run long pas
   |1        | xyz     | def     | yyy     |5       |
   | 12      |14       |null     | yxx     |        |
   |true     |14       |         |         | yxx THIS
-/  IS REALLY LONG  |
+  /  IS REALLY LONG  |
 ```
 
 *(With forced markers on, not the default) (width = 52, not the default) (and we wouldn't fold at all in a table by default either)*
@@ -1254,23 +1256,23 @@ If you want to fold in a table, it's usually better to let the line run long pas
   |1        | xyz     | def     | yyy     |5       |
   | 12      |14       |null     | yxx     |        |
   |true     |14       |         |         |"yxx THIS
-/  IS REALLY LONG AND CONTAINS A PIPE | SO WE MUST
-/  DOUBLE QUOTE IT FOLDED OR NOT BECAUSE IT IS IN A
-/  TABLE"  |
+  /  IS REALLY LONG AND CONTAINS A PIPE | SO WE MUST
+  /  DOUBLE QUOTE IT FOLDED OR NOT BECAUSE IT IS IN
+  /  A TABLE"  |
 ```
 
 **Example: folding the header row is valid, but not default and probably a really bad idea**
 ```json
 [{"a":1, "b":"xyz", "c":"def", "d":"yyy", "E THIS IS REALLY LONG":5},{"a":"12", "b":14, "c":null, "d":"yxx"},{"a":true, "b":14, "E THIS IS REALLY LONG":"yxx THIS IS REALLY LONG"}]
 ```
-*(width = 52, not the default) (and we wouldn't fold at all in a table by default either)*
+*(width = 52, not the default, force indent markers on, also not the default) (and we wouldn't fold at all in a table by default either)*
 ```
 [ |a        |b        |c        |d        |E THIS
-/  IS REALLY LONG      |
+  /  IS REALLY LONG      |
   |1        | xyz     | def     | yyy     |5       |
   | 12      |14       |null     | yxx     |        |
   |true     |14       |         |         | yxx THIS
-/  IS REALLY LONG  |
+  /  IS REALLY LONG  |
 ```
 
 **Example: not table-compatible (would lose key order if stored as a table and round-tripped — must use non-table display)**
@@ -1298,7 +1300,7 @@ TJSON is not allowed to render this as a table irrespective of options as it can
 
 **Example: nested object with table (rendered as table — not the default for this size, and with a fold — definitely not the default; used to illustrate fold syntax)**
 ```json
-{"level1":{"level2":{"level3":[{"a":"apple","b":2},{"a":3,"b":"pearwithfoldnospaces"}]}}}
+{"level1":{"level2":{"level3":[{"a":"apple","b":2},{"a":3,"b":"pearfoldnospaces"}]}}}
 ```
 *(width = 23, folding within a table is not default behavior)*
 ```
@@ -1307,8 +1309,8 @@ TJSON is not allowed to render this as a table irrespective of options as it can
       level3:
         |a       |b     |
         | apple  |2     |
-        |3       | pearwi
-      / thfoldnospaces  |
+        |3       | pearfo
+        / ldnospace  |
 ```
 
 *(width = 25, non-default option force markers is on, folding within a table is not default behavior)*
@@ -1318,8 +1320,8 @@ TJSON is not allowed to render this as a table irrespective of options as it can
     { level3:
       [ |a       |b     |
         | apple  |2     |
-        |3       | pearwi
-      / thfoldnospaces  |
+        |3       | pearfo
+        / ldnospaces  |
 ```
 
 **Example: same JSON, not rendered as a table (default behavior for an array of structs of this size, with non-default fold for illustration)**
@@ -1331,8 +1333,8 @@ level1:
     [ { a: apple
         b:2
       { a:3
-        b: pearwithfoldno
-        / spaces
+        b: pearfoldnospac
+        / es
 ```
 #### Parallelism between table and non-table rendering of the same data
 
@@ -1410,9 +1412,13 @@ This allows nonempty objects and non-empty arrays only as all simpler JSON value
 
 MINIMAL JSON MUST NEVER be wrapped or folded, and MUST NEVER be packed in a TJSON line with any other value (not be packed in the sense of TJSON packing it with other items in the same object or array on the same line, it's required to be packed as far as no intermediate whitespace within the MINIMAL JSON itself) and can be detected with its opening `{[^} ]` or `[[^] ]` immediately after the indent level by the parser.  It ends at the end of the line, valid or not.  If it isn't valid, that's an error.  All the basic JSON values work as is, and objects and arrays can be placed in there in MINIMAL JSON format if necessary - but this is almost never a good idea.  All the simple JSON values (not nonempty object, not nonempty array) are also TJSON values, so no special provision needs to be made for those.
 
+MINIMAL JSON is generally going to look better if it's broken out at an array boundary, because if it's broken out at an object boundary our only choice is to stuff it onto the same line as its parent key to avoid array ambiguity.
+
 While producing TJSON containing MINIMAL JSON is strongly discouraged, it might be the least bad option for some implementations in some situations.  An example might be a single string within a 500 deep nested single element array or something similarly bizarre.  That's going to look like garbage no matter what you do, and TJSON containing MINIMAL JSON might be the best answer in some cases.
 
 MINIMAL JSON must be on a line by itself (aside from the indent and the `[` or `{` indent marks that sometimes go within the indent), it must have zero non-data whitespace, (that's why it's called MINIMAL JSON) - and it always ends at the end of the line - nothing may come after it on that line and it must have the line to itself other than the indent and any indent marks before it.
+
+As a special exception we allow a non folded bare or quoted key immediately before the MINIMAL JSON on its same line.  This is even more strongly discouraged than MINIMAL JSON, but the only way to do non-root level MINIMAL JSON that does not have an array level to break on.
 
 MINIMAL JSON IS STRONGLY DISCOURAGED, BUT IS ALLOWED FOR USE WHEN NOTHING ELSE FITS YOUR USE CASE
 
@@ -1443,17 +1449,17 @@ JSON version:
 [[[{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]]]
 ```
 
-**Example: TJSON containing MINIMAL JSON (one object layer is in the TJSON)**
+**Example: TJSON containing MINIMAL JSON (one object layer and one array layer is in the TJSON)**
 ```
-tjson_key:
-  [{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]
+  tjson_key:
+    [{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]
 ```
 JSON version:
 ```json
 {"tjson_key":[[{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]]}
 ```
 
-*(Forbidden — MINIMAL JSON is not on its own line)*
+**Example — not recommended because MINIMAL JSON is not entirely on its own line, but we have to allow this as a special exception as otherwise it's not possible to embed MINIMAL JSON unless there's an array surrounding it to break at.**
 ```
   tjson_key:[{"a ":{"b":null,"c":"ab cd","d":3}},{"a":true}]
 ```
@@ -1582,20 +1588,136 @@ Not coincidentally, when you print a table that's the root element it ends up lo
             f:
               g:
                 h key watch this: /<
- // Optionally  /< here is where I would put the indent glyph instead if a generator wanted it on the next line, it would be the only two nonspace characters on the line if it weren't embedded in this comment, but it would be in exactly the same place
+ // Optionally   /< here is where I would put the indent glyph instead if a generator wanted it on the next line, it would be the only two nonspace characters on the line if it weren't embedded in this comment, but it would be in exactly the same place
   |look  |at  |my  |super  |cool  |table  |
   |1     |2   |true  |false  |5   | table is  |
   | too  | short  | though  | sadly  | for  |
   | this  | technique  | to  | make  | sense  | here  |
   | but  | for  | longer  | tables  | it helps  | make it
-/  easier to read  |
+  /  easier to read  |
+  | Misalignment  | not  | great  | but  | it is allowed  |
+                 />
+                sibling of h key watch this: sibling of h value
+```
+**Example: above but generator pushing indent glyph to next line for stylistic reasons.**
+```
+  a:
+    b:
+      c:
+        d:
+          e:
+            f:
+              g:
+                h key watch this:
+                 /<
+  |look  |at  |my  |super  |cool  |table  |
+  |1     |2   |true  |false  |5   | table is  |
+  | too  | short  | though  | sadly  | for  |
+  | this  | technique  | to  | make  | sense  | here  |
+  | but  | for  | longer  | tables  | it helps  | make it
+  /  easier to read  |
   | Misalignment  | not  | great  | but  | it is allowed  |
                  />
                 sibling of h key watch this: sibling of h value
 ```
 
 THEORY BEHIND ABOVE EXAMPLE:
-we reset n to 0, so now all we have to do is show the table JSON `[{....}]` at n=0, table gets shown starting at the indent level inside the surrounding array (the same level as the one at which we start the contained objects) not at the indent level before of the surrounding array, so we are effectively at n>=2 so we can fold within it if we have to.  Note that the table lines of the TJSON at EXACTLY the same visible indent as they would be if we just outputted the array of objects part of the above example as the root node of its own example.  This is not a coincidence, it must be this way to keep logical coherence.  This is the furthest left a table can possibly be shown - it would be at the same visible indent level if it were the root node.
+We reset n to 0, so now all we have to do is show the table JSON `[{....}]` at n=0, table gets shown starting at the indent level inside the surrounding array (the same level as the one at which we start the contained objects) not at the indent level before of the surrounding array, so we are effectively at n>=2.  Note that the table lines of the TJSON at EXACTLY the same visible indent as they would be if we just outputted the array of objects part of the above example as the root node of its own example.  This is not a coincidence, it must be this way to keep logical coherence.  It would be at the same visible indent level if it were the root node.  As you can see below, if you want a fully left justified table you can do it, by taking care of the array level indent first.
+
+**Example: above but generator taking care of table array level indent before the indent adjustment glyph instead of after it to fully left justify table.**
+
+```
+  a:
+    b:
+      c:
+        d:
+          e:
+            f:
+              g:
+                h key watch this:
+                   /<
+|look  |at  |my  |super  |cool  |table  |
+|1     |2   |true  |false  |5   | table is  |
+| too  | short  | though  | sadly  | for  |
+| this  | technique  | to  | make  | sense  | here  |
+| but  | for  | longer  | tables  | it helps  | make it
+/  easier to read  |
+| Misalignment  | not  | great  | but  | it is allowed  |
+                   />
+                sibling of h key watch this: sibling of h value
+```
+
+```json
+{"barekey":3}
+```
+**Example with normal rendering**
+```
+  barekey:3
+```
+**Example with indent adjustment marker (probably a poor generator choice, but valid)**
+```
+   /<
+barekey:3
+   />
+```
+**Bad Example - an indent adjustment glyph must come at the start and end of a nonempty array or nonempty object - 3 is a basic value so this is invalid and should not parse**
+```
+  barekey: /<
+3
+```
+
+```json
+{"barekey":[3]}
+```
+**Example with indent adjustment marker (ugly but valid)**
+```
+  barekey: /<
+  3
+   />
+```
+**Example with indent adjustment marker (ugly but valid)**
+```
+  barekey:
+   /<
+  3
+   />
+```
+**Bad Example: can't do inline array on a key with an indent adjustment glyph, must be on next line**
+```
+  barekey:   /<
+3
+```
+
+```json
+{"barekey":[[3]]}
+```
+**Example with normal rendering**
+```
+  barekey:
+  [ [ 3
+```
+**Example with indent adjustment marker (ugly but valid)**
+```
+  barekey:
+  [  /<
+[ 3
+     />
+```
+**Bad Example - indent markers must be provided if we do a jump of more than n+2 at once logically, and an indent adjustment glyph doesn't change any of that just because one of the n+2 jumps is on the next line.**
+```
+  barekey:
+  [  /<
+  3
+     />
+```
+**Bad Example - indent markers must be provided if we do a jump of more than n+2 at once logically, and an indent adjustment glyph doesn't change any of that just because one of the n+2 jumps is on the next line.**
+```
+  barekey:
+     /<
+[ 3
+     />
+```
+
 
 **Example: ending glyph optional when no more data follows** (allowed but not required to include closing `/>`)
 
@@ -1617,8 +1739,24 @@ we reset n to 0, so now all we have to do is show the table JSON `[{....}]` at n
   k:5
 // It would be here  />
 ```
-
-**Example: deep array glyph use** (30 levels of array; we are allowed but not required to include the two closing `/>`, as there is no more data after either of the `/>` symbols)
+```
+  a:
+    b:
+      c:
+        d:
+          e:
+            f:
+              g:
+                h:
+                  i:
+                    j:
+                       /<
+// This is the same idea but I took care of the indent BEFORE i used the indent adjustment glyph so I can
+// now fully left justify k:5 rather than have two spaces before.  I still don't need an ending glyph.
+k:5
+// It would be here    />
+```
+**Example: deep array glyph use** (30 levels of array; we are allowed but not required to include the two closing `/>`, as there is no more data after either of the `/>` symbols - the placement of the indent glyphs is up to the generator, but as you can see we can't skip any indent markers just because we are using indent glyphs)
 ```json
 [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
 ```
@@ -1637,6 +1775,8 @@ Indent level adjustment glyphs are in some ways contrary to the goals of the pro
 In certain circumstances, such as tables, using indent adjustment glyphs by default before and after enhances readability by forcing the table to the left side of the reading area where the user might expect to find a table, creates room for additional data, and has only a small impact on positional awareness as long as we reliably adjust indent before and after the table.  This should feel familiar to a reader that also looks at ``` and left indented `` multiline strings, as it is more likely to feel like a display method for a field rather than an indent level, even if it is not necessarily that on a syntax or parsing level.
 
 Adjusting the indent level for more than just the duration of a table or a multiline string in order to accommodate deeply indented trees is inherently more hazardous to the locality of the viewing experience, even though it may be necessary.  As such, generators may choose to, but need not, add comments near the indent level adjustment to orient the reader.  The form that these comments might take, or whether to generate them at all is left up to the generator, but I would suggest something like this to tell the user what visible indent level means if that is important to your application.  For many purposes, perhaps most, the reader may be less interested in the exact depth, and comments may be better omitted.  This commenting idea is not part of the rules of the specification, it is just a helpful note to remind generators that they can use comments to orient the reader, particularly when the generator is forced to do something disorienting to the reader.
+
+Indent adjustment glyphs may only be used 1) before a nonempty array, ending immediately after the nonempty array ends, or 2) before a nonempty object starts, ending immediately after the nonempty object ends.
 
 Comments must always be ignored by parsers.  The comments below are purely optional, and may, or may not be generated purely to orient the reader, in this case as to the actual n indent level of visible n=0.  Generators are allowed to add as many or as few comments as they like, to anything, for any reason, but hopefully with the goal of improving the reading experience.  As always, comments MUST be on their own line as required by the specification.
 
