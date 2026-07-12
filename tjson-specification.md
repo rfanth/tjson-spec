@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.4.2
+# Text Json (TJSON) Specification v0.4.3
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -95,13 +95,21 @@ TOP LEVEL TJSON STARTS AT INDENT 0, or another indent level as defined by the pa
 
 There is only one root level value in TJSON at indent 0.  More than one is not allowed.
 
-### EOL Handling
+### EOL Handling and Post-Processing Resistance
+
+TJSON is intended to be a substitute for text in many places, and as such it needs to allow for post-processing resistant features so it can survive alongside text, or within toolchains designed for text.  This does not mean that all generators need to resist post-processing, but it is important that an appropriate generator can produce post-processing resistant output as one of the goals of the format is that TJSON can at least potentially be embedded in text.
 
 INCOMING UNESCAPED WINDOWS TYPE CRLF AND UNESCAPED LF ARE BOTH TREATED AS EOL, even in the same file.  A bare CR (carriage return not followed by LF) is a parse error - our parser should never see a bare CR.  If it does, that's an error.  TAB characters are only allowed as literal content inside multiline strings. A tab anywhere else is a parse error.  Implementors may choose to avoid multiline strings that contain tabs and make them regular JSON strings instead.
 
-WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incompatible with your use case or the user specifically requests otherwise through an option, in which case CRLF is EOL instead.  No other EOL's are allowed.
+WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incompatible with your use case or the user specifically requests otherwise through an option, in which case CRLF is EOL instead.  No other EOL's are allowed.  (As of this writing, most Windows tooling deals with LF just fine, so incompatible means more than just on Windows.)
 
-TJSON HAS NO EMPTY LINES WITHIN IT, ASIDE FROM WITHIN TRANSPARENT TYPE MULTILINE STRINGS (transparent multiline strings can contain empty lines; the bold multiline can't ever be an empty line because of the initial `|`, and the minimal can't because the interior of the string is at n+2, so you are guaranteed at least two spaces at the start).
+TJSON HAS NO ZERO-LENGTH LINES WITHIN IT, ASIDE FROM WITHIN TRANSPARENT TYPE MULTILINE STRINGS.  Transparent multiline strings can contain empty (zero-length) lines; the bold multiline can't ever be an empty line because of the initial `|`, and the minimal can't because the interior of the string is at n+2, so you are guaranteed at least two spaces at the start.  Transparent type multilines are optional, allowing users that need no completely empty lines ever to easily avoid them.  Bold multilines only will guarantee no lines with only spaces as well if that is desired by the user, possibly to assist post-processing by other tools that might use such a line as a delimiter.
+
+TJSON SURVIVES LF->CRLF AND CRLF->LF CONVERSION OF THE WHOLE FILE WITHOUT LOSING BYTE PERFECT ROUND TRIP DATA SAFETY.  We preserve the choice of EOL in multiline strings with a human-readable \r\n or \n (the default if omitted) as part of the initial multiline glyph, so we can mutate between the EOL LF to CRLF or back without losing data.
+
+DATA EOL TYPE IS USER VISIBLE.  The human readability of the escape sequence is important so the user reading it knows what the data contains within the multiline.  The user can tell what the line ending type is of a multiline just by reading it, similar to how they would be able to with a double quoted string with \r\n or \n inside.  The user reading it shouldn't have to guess line endings within data, and the parser knows what the data should be even if the file gets converted between EOL formats.  The user will not necessarily be able to spot spaces at the end of lines in a multiline, but that would also be true of the original document.
+
+PRE-EOL SPACES MAY NOT SURVIVE TRIMMING, BUT CAN WITH THE CORRECT OPTIONS.  We do not guarantee we always survive line end space trimming by default as it can lose space data within multilines or folds, but multilines and folds are both optional, leaving a way for the user to pick options that allow TJSON to consistently survive line-end space trimming in hostile environments without losing data.
 
 ### Generator Options
 
