@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.4.3
+# Text Json (TJSON) Specification v0.5.0
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -23,6 +23,8 @@ Rigidly spaced outputs can sometimes help not only the viewing experience, but t
 The parser must be able to parse all valid TJSON to JSON that represents the exact same data that the original JSON represented without any options on the TJSON parser, no matter what readability preferences were used with the generator to create TJSON from the original JSON.  Valid numeric representations in the original JSON must be preserved when translating to TJSON, and vice versa.  Exponent 'e+' vs just 'e' need not be distinguished as the meaning is identical and the look is nearly so.  Duplicate keys are not preserved by most JSON parsers in the wild, and are beyond the round-trip data fidelity guarantees that we try to enforce.  It doesn't mean that implementations should not try to preserve duplicate keys, but they can be valid TJSON implementations even if they do not.  If the platform preserves duplicate keys, the TJSON implementation should too, but is not required to do so.
 
 Though a more text like presentation is less forward about type information, it should be possible for the user to see the data as much as possible, and with a bit of knowledge, to be able to discern the type.  Spaces at the end of lines are invisible to the user.  Also, part of our round trip path might flow through text editors that tend not to be happy about spaces at the ends of lines.  As such, spaces at the end of lines in the output, though not forbidden, are never necessary for proper parsing, and are avoided wherever possible.
+
+In TJSON, indent level and spacing reveal the underlying data structure and types, and any explicit markers must highlight the truth of the existing space rather than overriding or supplanting it.  If something is in the wrong place, it's not the right thing in the wrong place, it's just lying about the data structure, as the location is the highest priority fact.  When type information is made more explicit than usual through non-default generator options, it must emphasize and reinforce the existing visual layout and visual cues.
 
 TJSON is supposed to be flexible for generators.  Many of the fields have more than one way to express them, with guidelines for generators to use to pick which is most likely to look good.  Where you need a single representation that passes a hashsum even from another generator, we have CANONICAL TJSON - which is not the default.  CANONICAL TJSON is TJSON with many of the default optional readability features turned off to avoid diff churn, and to create byte for byte consistent TJSON between generators.  It's still much more readable than JSON in my opinion and is still a huge visual upgrade if you have lots of JSON.  It also may look better or be more readable for certain particular use cases even if you are not sensitive to diff churn, depending on your data.
 
@@ -63,7 +65,9 @@ I expect there are also going to be other use cases I can't foresee right now, a
 
 5) Specifying folding rules to stay within pathologically small fixed width values, or for where the indent level n is almost the same as width (an indent glyph is provided to avoid the indent level getting too close to width for deep objects).  At very small width values, readability has already been lost.  What is being displayed is not analogous to human readable text anymore, and this specification will not attempt to accommodate it without overflowing a fixed width.  This avoids the insanity of deciding where to fold a long unicode code point, or a boolean.
 
-6) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
+6) Encouraging or requiring every platform to have its own general purpose implementation written from scratch, each with their own bugs.  This would be a recipe for disaster.  It's important that TJSON be well-specified and have platform independent tests so that special purpose implementations can exist, and so that other general purpose implementations can be made, but at least early on it is important that the reference implementation is linkable from everywhere without using that as an excuse for under specification.  Buggy special purpose generators or parsers meant for specific uses only are much less of a threat because it's easy to simply locally convert TJSON to JSON and then back to TJSON with a non-buggy implementation.  The first implementation needs to be flat out awesome.  It is sufficiently difficult to implement a correct general purpose parser or general purpose generator that everyone everywhere needs to be able to access a quality implementation without much effort.  As much as possible, all languages need access to a general purpose implementation that is fast, reliable, and runnable from anywhere that can handle JSON with a shim layer at most, both for ease of integration, and in order to avoid encouraging the creation of buggy general-purpose implementations that might cause fragmentation or generate things that they cannot parse.  This also has the added benefit that if the specification needs to evolve, it can do so with relative ease.
+
+7) Replacing JSON - I have no desire to replace JSON, that would make no sense at all, as it is a wonderful computer to computer data format.  As described below, MINIMAL JSON (basically minimized JSON) is actually also valid TJSON.
 
 ---
 
@@ -105,11 +109,15 @@ WHEN CREATING TJSON, OUTGOING EOL MUST DEFAULT TO LF NOT CRLF, unless it's incom
 
 TJSON HAS NO ZERO-LENGTH LINES WITHIN IT, ASIDE FROM WITHIN TRANSPARENT TYPE MULTILINE STRINGS.  Transparent multiline strings can contain empty (zero-length) lines; the bold multiline can't ever be an empty line because of the initial `|`, and the minimal can't because the interior of the string is at n+2, so you are guaranteed at least two spaces at the start.  Transparent type multilines are optional, allowing users that need no completely empty lines ever to easily avoid them.  Bold multilines only will guarantee no lines with only spaces as well if that is desired by the user, possibly to assist post-processing by other tools that might use such a line as a delimiter.
 
-TJSON SURVIVES LF->CRLF AND CRLF->LF CONVERSION OF THE WHOLE FILE WITHOUT LOSING BYTE PERFECT ROUND TRIP DATA SAFETY.  We preserve the choice of EOL in multiline strings with a human-readable \r\n or \n (the default if omitted) as part of the initial multiline glyph, so we can mutate between the EOL LF to CRLF or back without losing data.
+COMMENT DELETION OR ALTERATION USING EXTERNAL TOOLS WORKS, ASIDE FROM WITHIN NON-BOLD MULTILINES.  Multiline strings can contain '^[ ]*//.*$' comment lines that are actual data.  Anywhere else, a line starting with any number of spaces (including zero) followed by '//' is guaranteed to be a comment that can be stripped without changing the represented data.  If you intend to strip '//' comments using simple regex based tools, make sure to only use the `` pipe guarded multiline format (bold).  If you know the comments that you want to strip have a '//' at the start of the line, you can safely use the ` light multiline format too, but not ``` transparent type multilines as those can have a '//' at the start of the line that represents data.
+
+TJSON SURVIVES LF->CRLF AND CRLF->LF CONVERSION OF THE WHOLE FILE WITHOUT LOSING BYTE PERFECT ROUND TRIP DATA SAFETY.  We preserve the unescaped data EOL type in multiline strings with a human-readable \r\n or \n (the default if omitted) as part of the initial multiline glyph, so we can mutate the file EOL between LF and CRLF without losing the data EOL.
 
 DATA EOL TYPE IS USER VISIBLE.  The human readability of the escape sequence is important so the user reading it knows what the data contains within the multiline.  The user can tell what the line ending type is of a multiline just by reading it, similar to how they would be able to with a double quoted string with \r\n or \n inside.  The user reading it shouldn't have to guess line endings within data, and the parser knows what the data should be even if the file gets converted between EOL formats.  The user will not necessarily be able to spot spaces at the end of lines in a multiline, but that would also be true of the original document.
 
 PRE-EOL SPACES MAY NOT SURVIVE TRIMMING, BUT CAN WITH THE CORRECT OPTIONS.  We do not guarantee we always survive line end space trimming by default as it can lose space data within multilines or folds, but multilines and folds are both optional, leaving a way for the user to pick options that allow TJSON to consistently survive line-end space trimming in hostile environments without losing data.
+
+TRAILING SPACES ARE TREATED AS ERRORS BY DEFAULT WHERE NOT MEANINGFUL.  The reason for this is that sometimes they are meaningful (within multilines and occasionally within double quoted folds), and it's much better to find out that something is adding spaces to the end of your lines immediately as soon as you parse it rather than months later when you find out all of your multilines have had their data silently changed.  A special purpose parser or a general purpose parser with an option could choose to ignore this rule though, perhaps to demangle data that has already been mangled, or because we know that a human is editing it manually so we can chalk it up to that.
 
 ### Generator Options
 
@@ -205,15 +213,20 @@ OBJECT KEYS have two choices that the generator can pick from, the default is to
 
 BARE KEYS (preferred by default, even when it's also a basic type like "true" "false" or "null" (the bare key rules already forbid "{}" and "[]") - this is even safer than it is for bare strings as keys in JSON are always strings reducing the likelihood of confusion)
 
+BARE KEYS are always the same or stricter than BARE STRINGS.  Any restriction on a BARE STRING also applies to a BARE KEY, but bare keys have additional restrictions.  There is no valid BARE KEY that cannot be a valid BARE STRING in the same context.  If the spec allows this (and it shouldn't) it's a bug in the spec.
+
 BARE KEYS are required to meet certain rules, which are expressed below - not everything is allowed to be a BARE KEY
 
 Valid BARE KEYS MUST satisfy all of the following rules: (MUST - this is not optional):
 
-1. `/^[\p{L}\p{N}][\p{L}\p{N}_()/'.!%&, -]*$/u`
-2. start with a letter or number (already implied by regexp)
-3. other chars after the first must be `[\p{L}\p{N}_()/'.!%&, -]` (already implied by regexp)
-4. the last character cannot be a space, comma, or quotelike (look at rules for bare strings, last char here must follow last char rules for bare strings too (we are already way tighter than that with the regexp but it does remove `,` and `'`) (not implied by regexp)
-5. may not contain more than one consecutive space (not implied by regexp)
+0. Must satisfy all the rules for BARE STRINGS.  In a table heading, a bare key must satisfy the rules for bare strings in a table also.  All other rules are in addition to this, not in place of this.
+1. `/^[\p{L}\p{N}][\p{L}\p{N}_()/'.!%&, ;@$#*=?^~<>+-]*$/u`
+2. Start with a letter or number (already implied by regexp, stricter than bare strings)
+3. Other chars after the first must be `[\p{L}\p{N}_()/'.!%&, ;@$#*=?^~<>+-]` (already implied by regexp)
+4. The first or last character cannot be a space, a PIPELIKE CHARACTER, a COMMALIKE CHARACTER, or a QUOTELIKE CHARACTER (look at rules for bare strings, last char here must follow last char rules for bare strings too (we are already way tighter than that with the regexp but it does remove `,` and `'`) (not implied by regexp, though the regexp does exclude some but not all of these from the first character already)
+5. May not contain more than one consecutive space (not implied by regexp, but implied by bare string rules)
+6. May not contain a COLONLIKE CHARACTER anywhere (not implied by regexp, some are in p{L}, this is narrower than bare strings which are allowed to have a colon.)
+7. May not contain any weird characters anywhere other than regular interior non-consecutive spaces (fully implied by bare string definition): `[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`
 
 ### JSON String Keys
 
@@ -226,27 +239,47 @@ In this document, object keys are just keys, and the default favored form of the
 STRINGS: (not to include object keys, addressed later)
 Strings can have a variety of formats and this is intentional.  The default favored format is the BARE STRING.  In Json, a key is always a string, so there is no need to disambiguate it with the bare string type notation.  A key is either a JSON STRING or a BARE KEY, it's never one of the string types below.
 
+
 ### Bare Strings
 
-A BARE STRING cannot start or end with space, and cannot have whitespace at all other than non-consecutive regular spaces internally.  No space space allowed, multiple spaces are fine as long as they aren't at the ends and aren't next to each other.  A BARE STRING also cannot start or end with quote characters of any kind (``[\p{Quotation_Mark}`]``, to include backtick (U+0060)), and cannot start or end with comma-like characters (`[,\uFF0C\uFE50]` — ASCII comma U+002C, fullwidth comma U+FF0C, small comma U+FE50).  This is to avoid the user thinking something is quoted or in an inline array when it isn't.  A BARE STRING also cannot start with a `/`, to avoid looking like a comment or a fold marker when it is not.  A BARE STRING also cannot start with a `|` pipe or PIPELIKE CHARACTER, to avoid it looking like the start of a table line or a MULTILINE STRING when it is not.  Implementations may want more exclusions than these, they are not required to represent anything as a bare string, but they do need to be able to parse it.  The whole reason we have bare strings is to make them readable.  Except for our regular space (U+0020) rules above, control characters, invisible characters, composed characters (the problem there is not that they are composed, but that when you see a character in a bare string you can't even theoretically know its unicode representation anymore by looking at it, by restricting it to the single character only representation, now we can at least theoretically know) and other weird characters are forbidden (`[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`).  We intentionally allow emojis with exactly one bare string representation, this is not a mistake.  It's ok for programs that create TJSON to be more strict than this even by default (it's pretty generous, deterministic emojis for example) and fall back to a JSON string with some of the characters allowed by this rule, but they can't be less strict.  Unfortunately, excluding `\p{M}` does exclude certain languages, but I think the risk of hiding data is too great.  If a particular user spoke Tamil or Arabic and was willing to accept the risk internally, they might write their own producer that allows some of this anyway, and others would be able to parse it, but don't do this with any TJSON you aren't planning to consume exclusively locally, as it is not compliant.  We do allow parsing of unescaped characters as we would have allowed parsing it anyway if it was escaped properly.  However, the limitations on the first character regarding quote characters of any kind, `/`, and comma like characters; and any of the regular space rules in the entire bare string should be a parse error.
+A BARE STRING cannot start or end with space, and cannot have whitespace at all other than non-consecutive regular spaces internally.  No space space allowed, multiple spaces are fine as long as they aren't at the ends and aren't next to each other.  A BARE STRING also cannot start or end with QUOTELIKE CHARACTERS of any kind, to include backtick (U+0060), see definition of QUOTELIKE CHARACTERS), and cannot start or end with COMMALIKE CHARACTERS (`[,\uFF0C\uFE50...]` — this includes ASCII comma U+002C, fullwidth comma U+FF0C, small comma U+FE50, and others, see COMMALIKE CHARACTERS).  This is to avoid the user thinking something is quoted or in an inline array when it isn't.  A BARE STRING also cannot start with a `/` or FORESLASHLIKE CHARACTER, to avoid looking like a comment or a fold marker when it is not. A BARE STRING cannot start with a underscore or UNDERSCORELIKE CHARACTER to avoid looking like a `_`, which can be used at the beginning of a bare string in lieu of a space when you want to be extra literal, but the generator will not produce it by default.  A BARE STRING also cannot start or end with a `|` pipe or PIPELIKE CHARACTER, to avoid it looking like the edge of a table line or a MULTILINE STRING when it is not.  Implementations may want more exclusions than these, they are not required to represent anything as a bare string, but they do need to be able to parse it.  The whole reason we have bare strings is to make them readable.  Except for our regular space (U+0020) rules above, control characters, invisible characters, composed characters (the problem there is not that they are composed, but that when you see a character in a bare string you can't even theoretically know its unicode representation anymore by looking at it, by restricting it to the single character only representation, now we can at least theoretically know) and other weird characters are forbidden (`[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`).  We intentionally allow emojis with exactly one bare string representation, this is not a mistake.  It's ok for programs that create TJSON to be more strict than this even by default (it's pretty generous, deterministic emojis for example) and fall back to a JSON string with some of the characters allowed by this rule, but they can't be less strict.  Unfortunately, excluding `\p{M}` does exclude certain languages, but without the exclusion the risk of hiding data is too great.
+
+If a particular user spoke Tamil or Arabic and was willing to accept the risk internally, they might write their own generator option that allows some of this anyway, and may want to have their own nonconforming local parser option that is looser than the spec, but don't do this with any TJSON you aren't planning to consume exclusively locally, as it is not compliant.  However, the limitations on ["/:,|`] in bare strings and bare keys, and any of the regular space rules, should be a parse error even with some special case local only nonconforming parse/ingest toolchain as they are parse-critical.
 
 Parsers are allowed to have a strict mode that rejects any unescaped character that is not allowed to be produced by the spec, and for a parser that only works in a certain context, a parser might choose to reject those characters entirely.  (A high security context for instance.)  If a parser chooses to do this by default it should inform the user if practicable that it is parsing in strict mode or similar by default.  A parser might also choose to add security features and refuse to ingest certain things entirely escaped or otherwise, but that is not specification compliant, and should probably be done at the data layer rather than in the parser itself, at least logically, as it's doing two things, being a TJSON parser, and a security layer, not just being a TJSON parser.
 
-#### Additional Bare String Rule for Tables Only
+A BARE STRING (but not a BARE KEY) always has a non-data leading space (default), or optionally, in place of the non-data leading space, a non-data underscore when the generator is specifically asked to do so.  This leading space (default) or underscore (ugly, but allowed because sometimes an additional degree of emphasis on type is essential) is treated identically by the parser.  Because both a space and an underscore take up one space, and the parser doesn't depend on which is found, there is no difference in position between the two, ever.  They are completely interchangable, and no consistency in usage of one over the other in a document or even a line is required.  By default, generators should use the leading space, not the underscore.
 
-A generator is FORBIDDEN from producing a bare string that contains a `|` character within a table.  Generators should also avoid pipelike characters within a bare string in a table but this is a recommendation not a hard rule as it is not parse critical.  We want to be able to deterministically parse tables with insufficient padding, and having a hard rule on this allows us to do that.  It also allows special purpose generators to break padding rules without a parse failure if it makes sense for their use case, and provides assistance to people editing by hand.  We sacrifice bare strings in tables containing `|` to padding flexibility because bare string `|` is likely to be confusing, and insufficient padding is unlikely to be confusing.
+#### Additional Bare String/Bare Key Rule for Tables Only
 
-A bare key in a table may not contain a pipe anywhere within it.  A bare key already is forbidden from containing a pipe generally, but if we ever allowed it in other circumstances, we would not allow it within a table.
+A generator is FORBIDDEN from producing a bare string or bare key that contains a `|` character within a table.  Generators should also avoid pipelike characters within a bare string in a table but this is a recommendation not a hard rule as it is not parse critical.  We want to be able to deterministically parse tables with insufficient padding, and having a hard rule on this allows us to do that.  It also allows special purpose generators to break padding rules without a parse failure if it makes sense for their use case, and provides assistance to people editing by hand.  We sacrifice bare strings in tables containing `|` to padding flexibility because bare string `|` is likely to be confusing, and insufficient padding is unlikely to be confusing.
 
+Within a table, a parser MUST reject a bare string or bare key that contains a literal `|`.
 
-String: (this is a BARE STRING, the main and preferred string type) space almost-anything-see-above space space
+String: (this is a BARE STRING, the main and preferred string type) space almost-anything-see-above space space (space space is the ending only if something else is packed after it, we don't put meaningless spaces at the end of lines, we use an EOL instead)
+
+```json
+".*"
+```
 ```
  .*
 ```
 
-String (alternate): space anything newline
+String (end of line): space anything newline
+```json
+"string"
+```
 ```
  string
+```
+
+
+String (alternate bare format, not the default bare format, with underscore in place of leading space to emphasize type, note that the characters are in the same place): space anything newline
+```json
+"string"
+```
+```
+_string
 ```
 
 ### Folding
@@ -259,7 +292,7 @@ Fold indicators must be both preceded and followed by at least one data characte
 
 ### Number Folding
 
-Number folding follows the same rules as string folding below, including the requirement that the fold must be between the first and last data character.  Numbers are unlikely to need folding as most of them are not long, but it is possible so it is specified here.  Implementations should usually do something else before they get close enough to the margin to have to fold a number, such as use an indent glyph (described later) or just overflow the set width, but folding a number is allowed.  Generators should try to avoid folding numbers, especially right after the initial sign as it's more likely to be confusing to the user.  Numeric folding is not the default.
+Number folding follows the same rules as string folding below, including the requirement that the fold must be between the first and last data character.  Numbers are unlikely to need folding as most of them are not long, but it is possible so it is specified here.  Implementations should usually do something else before they get close enough to the margin to have to fold a number, such as use an indent glyph (described later) or just overflow the set width, but folding a number is allowed.  Generators should try to avoid folding numbers, especially right after the initial sign as it's more likely to be confusing to the user.  Breaks in numbers usually look better right before the `e` if there is one, or before the `.` (not quite as nice as before the e), but this is a generator preference.
 
 ### Object Key Folding
 
@@ -394,7 +427,7 @@ The single backtick form, we call MINIMAL multiline strings, the unguarded norma
 
 All three multiline string forms can have an optional `\r\n` or `\n` or nothing as part of the starting glyph at the end of the glyph.  Whatever form of the starting glyph, the ending glyph must match it exactly and be at the starting unmanipulated logical n indent.  For all three ` ``` ` TRANSPARENT, ` `` ` BOLD and `` ` `` MINIMAL forms, the ending glyph is REQUIRED, and it is REQUIRED to be at the proper indent.  Any other indent, higher or lower, is a parse error.  This rule is especially important from a reading perspective to preserve the ending glyph if you change the indent; we need to draw the reader's eye back to the correct indent level at the end so that they can continue reading without becoming disoriented after the multiline ends.
 
-Our starting glyph (the glyph includes the space at the start) is: `` ' `{1,3}(\\n|\\r\\n)?' `` EOL (+2 space indent until just before the ending glyph line) (though ` `` ` can and ` ``` ` must manipulate the indent level between the start and end glyph as defined below), the actual string data being displayed MUST contain at least one linefeed, and the final newline after we are done showing our MULTILINE STRING is at the original indent before we started and is not part of the string, ends when we see a final EOL followed by n spaces and our starting glyph including its leading space.  This is unparseable for ` ``` ` if the document contains that sequence, so another form of string (` `` ` is pretty good here, but you can fall back to a non MULTILINE STRING too) must be used instead.
+Our starting glyph (the glyph includes the space at the start) is: `` ' `{1,3}(\\n|\\r\\n)?' `` EOL (+2 space indent until just before the ending glyph line) (though ` `` ` can and ` ``` ` must manipulate the indent level between the start and end glyph as defined below), the actual string data being displayed SHOULD contain at least one linefeed and is REQUIRED to contain at least one data character, and the final newline after we are done showing our MULTILINE STRING is at the original indent before we started and is not part of the string, ends when we see a final EOL followed by n spaces and our starting glyph including its leading space.  This is unparseable for ` ``` ` if the document contains that sequence, so another form of string (` `` ` is pretty good here, but you can fall back to a non MULTILINE STRING too) must be used instead.
 
 The `(\n|\r\n)?` after the one to three backticks is a LOCAL EOL INDICATOR indicating what data any EOL (either `\n` or `\r\n`) within the MULTILINE STRING represents.  The default is `\n` if just ` ``` ` ` `` ` or `` ` `` is used.  Generators should default to displaying ` ``` `, ` `` `, and `` ` `` over ` ```\n `, ` ``\n `, and `` `\n ``.
 
@@ -584,6 +617,26 @@ JSON (it's long so most of it omitted in favor of ...)
 
 n is an integer indent level, always 0 or an even natural number
 
+**Bad Example (but parsable): multiline string with no data EOL**
+```
+ ``
+| This is probably a mistake by the user or generator, but is allowed to allow intentional visual emphasis and/or easier manual editing.
+ ``
+```
+
+**Good example (intentional emphasis in the right context): Still no EOL, but the generator knows it's data and may be justified here.
+```
+ ``
+| The generator knows what goes here and wants to emphasize it intentionally to the reader even though it does not contain an EOL.
+ ``
+```
+
+ **Bad Example (Parse error): multiline string with no content at all, not even a single character - this should fail to parse with any of the three multiline string forms, should have been ""**
+```
+ ``
+ ``
+```
+
 ---
 
 ## ARRAYS AND OBJECTS
@@ -617,26 +670,12 @@ JSON: `{"areallylongobjectkey":3}`
 ### Packing
 
 Packing is pushing additional values on the same line as another value, either elements of an array, or key value pairs in an object.
+Key value packing and array packing have different rules.
 We forbid packing key value pairs in an object on the same line as the parent key - it's just too confusing as a key value pair is not a simple type and it almost feels like an array.  We do sometimes pack an array with simple types only on the same line as a parent key as shown below.
+Arrays can sometimes pack basic types on the same line as the parent key.
 Packing is optional, and it's ok to pack even if the first element doesn't pack - this is within spec - the point is for generators to use the breathing room in the spec to generate easy to read text without violating the spec.
 
-**Example:** `[1,2,3]`
-```json
-[1,2,3]
-```
-```
-  1, 2, 3
-  // the above line is a packed array.  We put more than one basic value on the same line.  If it was just the first element in the array, it would be '  1'
-```
-
-**Example:** `["1", "2", "3"]`
-```json
-["1", "2", "3"]
-```
-```
-   1  2  3
-   // This type of packing is only allowed because all the types are strings - packing the numbers wouldn't be allowed because it would look like the strings
-```
+#### Key-Value Packing Examples
 
 **Example:** `{"A":1, "B":2, "C":3}`
 ```json
@@ -676,6 +715,27 @@ Packing is optional, and it's ok to pack even if the first element doesn't pack 
   // This is FORBIDDEN.  This is packed, and might theoretically be parseable, but is confusing because an object with kv pairs is just too complex for this type of treatment. This type of packing is still legal with arrays containing only basic types (an object key value pair is not a basic type).  In general, it's better looking not to pack on the same line as the parent key unless you are putting the whole thing on that line, but it is more compact which may be more important.
 ```
 
+#### Array Packing Examples
+
+**Example:** `[1,2,3]`
+```json
+[1,2,3]
+```
+```
+  1, 2, 3
+  // the above line is a packed array.  We put more than one basic value on the same line.  If it was just the first element in the array, it would be '  1'
+```
+
+**Example:** `["1", "2", "3"]`
+```json
+["1", "2", "3"]
+```
+```
+   1   2   3
+   // This type of packing is only allowed because all the types are strings - packing the numbers wouldn't be allowed because it would look like the strings
+```
+
+
 **Example:** `{"A":[1,2,3,4,5,6,7,8,9,10,11]}`
 ```json
 {"A":[1,2,3,4,5,6,7,8,9,10,11]}
@@ -706,15 +766,15 @@ Packing is optional, and it's ok to pack even if the first element doesn't pack 
 ```json
 ["ABC DEF GHI", "XYZ 123 456", "abc def ghi", "x"]
 ```
-*(bad but legal — using a packing separator with no actual packing)*
+*(ok, but ugly — generator is using a packing separator with no actual packing and strings that should probably be bare instead)*
 ```
-   ABC DEF GHI,
-   XYZ 123 456,
-   abc def ghi,
+  "ABC DEF GHI",
+  "XYZ 123 456",
+  "abc def ghi",
    x
   // this is technically legal, but you aren't actually packing anywhere in the entire array as you don't have more than one value on the same line, so it's better not to use a packing separator at all.  Implementors as always can make their own aesthetic choices.
 ```
-*(good and also legal)*
+*(good and also legal, not packed)*
 ```
    ABC DEF GHI
    XYZ 123 456
@@ -723,12 +783,12 @@ Packing is optional, and it's ok to pack even if the first element doesn't pack 
 ```
 *(good example)*
 ```
-  ABC DEF GHI,  XYZ 123 456,  abc def ghi,  x
+  ABC DEF GHI   XYZ 123 456   abc def ghi   x
 ```
 *(also a good example for small width)*
 ```
-   ABC DEF GHI,
-   XYZ 123 456,  abc def ghi,  x
+   ABC DEF GHI
+   XYZ 123 456   abc def ghi   x
    // It's ok and looks good here to use a packing character on the first line even though there's no actual packing going on on that line because we are packing the other lines and we want to remain consistent.
 ```
 
@@ -738,7 +798,7 @@ Generators may not output bare strings containing commas when packing (double qu
 ```json
 ["ABC, DEF, GHI", "XYZ, 123, 456", "abc, def, ghi", "x"]
 ```
-*(bad example — bare strings with commas used as separator 2)*
+*(bad example, parse error — bare strings with commas used as separator for a comma packed array which forbids bare strings)*
 ```
    ABC, DEF, GHI,
    XYZ, 123, 456,
@@ -746,11 +806,12 @@ Generators may not output bare strings containing commas when packing (double qu
    x
    // this is why we don't allow this.
 ```
-*(bad example — same but packed)*
+*(bad example, parse error — same but packed - this is part of the reason why we forbid bare strings in comma packed array lines)*
 ```
    ABC, DEF, GHI,  XYZ, 123, 456,  abc, def, ghi,  x
    // this is why we don't allow this.
 ```
+*(good example, not packed)*
 ```
    ABC, DEF, GHI
    XYZ, 123, 456
@@ -758,34 +819,57 @@ Generators may not output bare strings containing commas when packing (double qu
    x
    // This is a good way to handle this (it isn't packed at all, and for this kind of content, that may be the best thing you can do)
 ```
+*(good example, packed correctly)*
 ```
    ABC, DEF, GHI   XYZ, 123, 456   abc, def, ghi   x
   // This is legal, and compact, and pretty readable
 ```
+*(another good example)*
 ```
-  "ABC, DEF, GHI"  "XYZ, 123, 456"  "abc, def, ghi"   x
+   ABC, DEF, GHI   XYZ, 123, 456
+   abc, def, ghi   x
   // this looks pretty good too
 ```
+*(a parseable but just ok and somewhat ugly example that some generators might prefer)*
 ```
-  "ABC, DEF, GHI", "XYZ, 123, 456", "abc, def, ghi",  x
-  // also looks ok
+  "ABC, DEF, GHI", "XYZ, 123, 456", "abc, def, ghi", "x"
+  // also looks ok, but more quote laden
 ```
 
 ### Array Format
 
+1) Each element gets it's own line - always allowed, this is the default
 Array starter 1: (increment indent level by 2) newline + indent level spaces (parse first key to see if it's an object or not)
 Array separator 1: (works for anything, the default) newline + n spaces
 Array ending 1: newline + n-2 spaces, decrement indent level by 2
 
-Array starter 2 (inline start variant): increment indent level by 2, space space
+Note on packed array formats 2 and 3 below:
+Note that we are following the rule that the first element determines the bare string/non-bare string type - this is so the user only has to look for the extra space at the beginning of the line and not otherwise to read a packed array.  Many users of TJSON will simply not know or care about types, and they are able to ignore them if they like, but we need a sophisticated reader with a basic understanding of the format to be able to recover type information without remembering more than one or two rules (bare string starts with extra space, being the main one).  This is different from prior versions of the format, but necessary both for readability and reliable parsing without behaving in a way that is mysterious to the sophisticated reader.  It's not enough to have rules that enable consistent parsing; they also need to be relatively simple so that the subset of readers that care about types can quickly determine the type reliably when they need to do that.  Preferably, we want a reader of TJSON to be able to pick up the typing rules without being told if at all possible.
+We are also allowing packed array formats to be on the same line as the parent key also, though this will usually look bad unless the entire array contents can be fit on that line, but it can aid compactness and is left up to the generator.  It must parse either way.
+Different lines in the representation of the same data array can pick 1), 2) or 3) without parse issues as all are fairly readable together.  This is intentional.  This includes packing a one or more array elements on the line with the parent object key of the array and using any array packing strategy for the other lines.
+
+2) Comma separated packed array line format
+BARE STRINGS ARE NOT ALLOWED:  This is because it can become parse ambiguous and/or confusing to the reader if you allow a comma that is not double quoted and not a separator.  Other rulesets are possible that would disambiguate parsing, but the rules need to be really simple in order to allow a reader that knows only one or two things about TJSON to reliably discern the type when they need to.  We also do not want to force ourselves to double quote bare strings with commas for clarity, as bare strings with commas are pretty common and avoiding unnecessary quotes for readability is one of the strengths of the format.
+PARSER must error if it finds a violation of this rule.  This is important to avoid disasters like this: '  word,  word, 5,  word, 6' or '  word,  word, "word",  bare "string with" quotes'  which are hard to read and parse and probably an editing mistake.  The user can simply push it onto its own line unpacked if the user wants to add a comma somewhere.  Editing is a lower priority than reading in TJSON so this is an acceptable inconvenience for editors.
+Array starter 2 (inline start variant): increment indent level by 2, space space ( '[ ' here instead of '  ' is also acceptable if the writer wants to be particularly explicit, but generators should not generate it as it's ugly, this is a level of explicitness beyond force markers)
 Array starter 2 (next line start variant): just like array starter 1 (this is acceptable, but it usually looks better to just start on the next line if it doesn't all fit on one line with the key, so the default is to do that)
 Array separator 2: `", "` or `",\n"` + (n+2) spaces (continuation: comma at end of line, next line indented +2 from the key's indent (which is where we would have been anyway if we used array starter 1). All continuation lines use this same fixed indent.)
+The trailing ',' on a comma packed line is optional and SHOULD never be used for the last data element of an array or a line with only one element of the data array (but it should still parse for both).  Bare strings are not allowed to end with a comma, so this can both ease reading and reinforce to the knowledgeable reader that the line they are looking at does not contain a bare string.
 Array ender 2 (inline variant): newline at n-2 indent, decrement indent level by 2
 
-Type 3 is only allowed if all elements of the array are strings  (it's just too hard to tell two or three spaces between so not allowed with mixed types):
-Array starter 3: same as array starter 1 (increment indent level + 2, newline + indent level spaces)
-Array separator 3: `"  "` or `\n` + n spaces (raw strings will be effectively three spaces because raw strings start with a leading space themselves).  If we do a newline, the next array elements will end up right where they would have been if we used array starter 1.  This is not an accident
+3) Double space separated packed array line format
+REQUIRES that all elements of the array on that line are bare strings.
+REQUIRES that all elements of the array on the same line be separated by 3 spaces from each other.
+Array starter 3 (inline start variant): increment indent level by 2, space space ( '[ ' here instead of '  ' is also acceptable if the writer wants to be particularly explicit, but generators should not generate it as it's ugly, this is a level of explicitness beyond force markers) (will effectively be three spaces because what follows is required to be a bare string)
+Array starter 3 (next line start variant): same as array starter 1 (increment indent level + 2, newline + indent level spaces)
+Array separator 3: `"  "` or `\n` + n spaces (bare strings will be effectively three spaces because bare strings start with a leading space themselves).  If we do a newline, the next array elements will end up right where they would have been if we used array starter 1.  This is not an accident
 Array ender 3: newline
+
+These array packing rules are tighter than they were before v0.5.0 - if you need a prior version to generate tjson (just upgrade instead, it's more straightfoward) that can be ingested by later versions, turn off array packing with options.
+
+You are not allowed to fold within either of the two packed array formats (Type 2 or Type 3 above).
+
+It is absolutely acceptable and often preferable for generators to use multiple array packing formats in the same data array (this was formerly discouraged before 0.5.0, but having tighter array packing rules here prevents reader confusion without discouraging generators from mixing packing formats in the same array, as now the packing format itself helps the reader discern type information).
 
 ### Object Format
 
@@ -971,8 +1055,8 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
 ```
   a:5
   6: fred
-  xy: []
-  de: {}
+  xy:[]
+  de:{}
   e:
     1
 ```
@@ -981,15 +1065,15 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
 ```
 { a:5
   6: fred
-  xy: []
-  de: {}
+  xy:[]
+  de:{}
   e:
   [ 1
 ```
 
-**Example:** `{"a": 5, "6": "fred", "obj": {"o1": 8, "o2": [ "ary1", "ary2", "ary3"], "o3": "o3value"}}` (all array elements are strings, so we can but are not required to pack them together)
+**Example:** `{"a": 5, "6": "fred", "obj": {"o1": 8, "o2": ["ary1veryverylong", "ary2veryverylong", "ary3", "ary4", "ary5", "ary6medium", "ary7"], "o3": "o3value"}}` (all array elements are strings, so we can but are not required to pack them together)
 ```json
-{"a": 5, "6": "fred", "obj": {"o1": 8, "o2": [ "ary1", "ary2", "ary3"], "o3": "o3value"}}
+{"a": 5, "6": "fred", "obj": {"o1": 8, "o2": ["ary1veryverylong", "ary2veryverylong", "ary3", "ary4", "ary5", "ary6medium", "ary7"], "o3": "o3value"}}
 ```
 ```
   a:5
@@ -1004,9 +1088,9 @@ THE CRITICALITY OF PRECISE SPACING AND WHY MARKERS ARE REQUIRED FOR MULTI-LEVEL 
     o3: o3value
 ```
 
-### KEY-VALUE PACKING 
+### KEY-VALUE PACKING
 
-WARNING:  Key value packing spacing other than 4 is experimental and subject to change.  If it changes it's going to get tighter, not looser than listed below.
+WARNING:  Key value packing spacing other than 4 is experimental and subject to change.  If it changes it's going to get less permissive, not more permissive than listed below.
 
 As is rarely the case in TJSON, there is exactly one type after every value, a key (always a string, usually expressed as a bare key).  Parsing does not require tightly policing the number of spaces between a key: value pair and the next key: value pair on the same line.  Still, visual perception demands some restrictions.
 
@@ -1061,7 +1145,7 @@ Four spaces is a better default than two because two spaces are used for so many
         of the multiline is the t in "this is a multiline".  I can even use backticks in here like `this` it's totally fine even at the beginning of a line like
         `this` because it's at the wrong indent level to start and end it.  If a text looks too likely to fake out the user the implementor can choose `` instead if they like.  It parses fine for the same reason, no matter what is in here.
         this is part of the same string
-        MULTILINE STRINGS MUST contain at least one real unescaped newline.
+        MULTILINE STRINGS SHOULD contain at least one real unescaped newline, but MUST contain at least one character in order to parse.
           this is part of the multiline string with two leading spaces as part of the string
         this is the end of the string the entire multiline ends with just a newline that's not part of the string and -2 indent spaces and a ` at
         n+1, sort of like a bare string ` but a bare string can't be a ` so the user knows it's not a bare string, it's the end of the multiline.
@@ -1135,9 +1219,9 @@ null
 {}
 ```
 
-**Example:** `["a",6,true,false,null,"abc","it-s;:complicated",[],{}]` (multiline, default)
+**Example:** `["a",6,true,false,null,"abc","it-s;:complicated","contains, comma",[],{}]` (multiline, default)
 ```json
-["a",6,true,false,null,"abc","it-s;:complicated",[],{}]
+["a",6,true,false,null,"abc","it-s;:complicated","contains, comma",[],{}]
 ```
 ```
    a
@@ -1146,16 +1230,39 @@ null
   false
   null
    abc
-  "it-s;:complicated"
+   it-s;:complicated
+   contains, comma
   []
   {}
 ```
-
-**Example:** same JSON (optional, packed; may require double-quoted strings if commas present)
+**Example:** same JSON (optional, packed; generator chose to split it between lines, chose not to use a trailing comma on the first line)
 ```
-   a, 6, true, false, null,  abc, "it-s;:complicated", [], {}
+  "a", 6, true, false, null, "abc"
+   it-s;:complicated   contains, comma
+  [], {}
 ```
-
+**Example:** same JSON (optional, packed; generator chose to put it all on one line)
+```
+  "a", 6, true, false, null, "abc", "it-s;:complicated", "contains, comma", [], {}
+```
+**Example:** same JSON (optional, packed; generator chose to put the string with a comma in it in double quotes for type clarity, or maybe to fit a fixed width so it can pack the next line; generator also chose to use a trailing comma on the first comma packed line)
+```
+  "a", 6, true, false, null,
+   abc   it-s;:complicated
+  "contains, comma", [], {}
+```
+**Bad Example, Parse Error:** same JSON (illegal attempt to comma pack a bare string)
+```
+  "a", 6, true, false, null, abc
+   it-s;:complicated
+  "contains, comma", [], {}
+```
+**Bad Example, Parse Error:** same JSON (illegal attempt to add a optional trailing pack comma a the bare string it-s;:complicated, even if nothing else is on the line)
+```
+  "a", 6, true, false, null, abc
+   it-s;:complicated,
+  "contains, comma", [], {}
+```
 ---
 
 ## TABLES
@@ -1203,7 +1310,7 @@ Uneven and ugly padding is not desirable, and generators should mostly not produ
   |true     |14                                |         |         | yxx  |
 ```
 
-### Folding Within a Table  **Experimental and Optional - Not fully implemented, and subject to change**
+### Folding Within a Table  **Experimental and Optional - Not fully implemented, and subject to change, may never be implemented**
 
 FOLDING WITHIN A TABLE - This is turned off by default, and is almost always a bad idea.  Folding in a table is just like folding other places.
 
@@ -1406,7 +1513,190 @@ If all three are met, use table format. Otherwise use regular array of objects f
 
 ### Pipelike Character Definition
 
-PIPELIKE CHARACTER DEFINITION A pipelike character is U+007C (VERTICAL LINE) or any character in the following set: U+00A6, U+01C0, U+2016, U+2223, U+2225, U+254E, U+2502, U+2503, U+2551, U+FF5C, U+FFE4
+A PIPELIKE CHARACTER is a vertical line (U+007C), or any other character in the following set: U+007C, U+00A6, U+01C0, U+01C1, U+05C0, U+16C1, U+2016, U+2223, U+2225, U+23D0, U+2502, U+2503, U+2506, U+2507, U+250A, U+250B, U+254E, U+254F, U+2551, U+258F, U+2595, U+2758, U+2759, U+275A, U+2980, U+2AF4, U+2AFC, U+2AFE, U+2AFF, U+2D4F, U+FE31, U+FE33, U+FF5C, U+FFE4, U+1FB70, U+1FB71, U+1FB72, U+1FB73, U+1FB74, U+1FB75
+
+(Note: the only part of this that is currently theoretically important for parsing is `|` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+These include both things that look like a pipe, but also things that might look like a vertical boundary because we are using pipe as a table boundary in some cases.
+
+U+007C  |   VERTICAL LINE
+U+00A6  ¦   BROKEN BAR
+U+01C0  ǀ   LATIN LETTER DENTAL CLICK
+U+01C1  ǁ   LATIN LETTER LATERAL CLICK
+U+05C0  ׀   HEBREW PUNCTUATION PASEQ
+U+16C1  ᛁ   RUNIC LETTER ISAZ IS ISS I
+U+2016  ‖   DOUBLE VERTICAL LINE
+U+2223  ∣   DIVIDES
+U+2225  ∥   PARALLEL TO
+U+23D0  ⏐   VERTICAL LINE EXTENSION
+U+2502  │   BOX DRAWINGS LIGHT VERTICAL
+U+2503  ┃   BOX DRAWINGS HEAVY VERTICAL
+U+2506  ┆   BOX DRAWINGS LIGHT TRIPLE DASH VERTICAL
+U+2507  ┇   BOX DRAWINGS HEAVY TRIPLE DASH VERTICAL
+U+250A  ┊   BOX DRAWINGS LIGHT QUADRUPLE DASH VERTICAL
+U+250B  ┋   BOX DRAWINGS HEAVY QUADRUPLE DASH VERTICAL
+U+254E  ╎   BOX DRAWINGS LIGHT DOUBLE DASH VERTICAL
+U+254F  ╏   BOX DRAWINGS HEAVY DOUBLE DASH VERTICAL
+U+2551  ║   BOX DRAWINGS DOUBLE VERTICAL
+U+258F  ▏   LEFT ONE EIGHTH BLOCK
+U+2595  ▕   RIGHT ONE EIGHTH BLOCK
+U+2758  ❘   LIGHT VERTICAL BAR
+U+2759  ❙   MEDIUM VERTICAL BAR
+U+275A  ❚   HEAVY VERTICAL BAR
+U+2980  ⦀   TRIPLE VERTICAL BAR DELIMITER
+U+2AF4  ⫴   TRIPLE VERTICAL BAR BINARY RELATION
+U+2AFC  ⫼   LARGE TRIPLE VERTICAL BAR OPERATOR
+U+2AFE  ⫾   WHITE VERTICAL BAR
+U+2AFF  ⫿   N-ARY WHITE VERTICAL BAR
+U+2D4F  ⵏ   TIFINAGH LETTER YAN
+U+FE31  ︱  PRESENTATION FORM FOR VERTICAL EM DASH
+U+FE33  ︳  PRESENTATION FORM FOR VERTICAL LOW LINE
+U+FF5C  ｜  FULLWIDTH VERTICAL LINE
+U+FFE4  ￤  FULLWIDTH BROKEN BAR
+U+1FB70  🭰  VERTICAL ONE EIGHTH BLOCK-2
+U+1FB71  🭱  VERTICAL ONE EIGHTH BLOCK-3
+U+1FB72  🭲  VERTICAL ONE EIGHTH BLOCK-4
+U+1FB73  🭳  VERTICAL ONE EIGHTH BLOCK-5
+U+1FB74  🭴  VERTICAL ONE EIGHTH BLOCK-6
+U+1FB75  🭵  VERTICAL ONE EIGHTH BLOCK-7
+
+### Quotelike Character Definition
+
+A QUOTELIKE CHARACTER is a backtick (U+0060), a double quote (U+0022), single quote (U+0027), or any other character in the following set: [\p{Quotation_Mark}`]: U+0022, U+0027, U+0060, U+00AB, U+00BB, U+2018, U+2019, U+201A, U+201B, U+201C, U+201D, U+201E, U+201F, U+2039, U+203A, U+2E42, U+300C, U+300D, U+300E, U+300F, U+301D, U+301E, U+301F, U+FE41, U+FE42, U+FE43, U+FE44, U+FF02, U+FF07, U+FF62, U+FF63
+
+(Note: the only part of these that are currently theoretically important for parsing is `"` and `\`` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+This includes not only things that might look like a double quote, but things that might be interpreted like a quote to the reader in a meaning sense, if not a visual one.  This is broader than some of these other definitions intentionally.
+
+U+0022  "   QUOTATION MARK
+U+0027  '   APOSTROPHE
+U+0060  `   GRAVE ACCENT
+U+00AB  «   LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
+U+00BB  »   RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
+U+2018  ‘   LEFT SINGLE QUOTATION MARK
+U+2019  ’   RIGHT SINGLE QUOTATION MARK
+U+201A  ‚   SINGLE LOW-9 QUOTATION MARK
+U+201B  ‛   SINGLE HIGH-REVERSED-9 QUOTATION MARK
+U+201C  “   LEFT DOUBLE QUOTATION MARK
+U+201D  ”   RIGHT DOUBLE QUOTATION MARK
+U+201E  „   DOUBLE LOW-9 QUOTATION MARK
+U+201F  ‟   DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+U+2039  ‹   SINGLE LEFT-POINTING ANGLE QUOTATION MARK
+U+203A  ›   SINGLE RIGHT-POINTING ANGLE QUOTATION MARK
+U+2E42  ⹂   DOUBLE LOW-REVERSED-9 QUOTATION MARK
+U+300C  「  LEFT CORNER BRACKET
+U+300D  」  RIGHT CORNER BRACKET
+U+300E  『  LEFT WHITE CORNER BRACKET
+U+300F  』  RIGHT WHITE CORNER BRACKET
+U+301D  〝  REVERSED DOUBLE PRIME QUOTATION MARK
+U+301E  〞  DOUBLE PRIME QUOTATION MARK
+U+301F  〟  LOW DOUBLE PRIME QUOTATION MARK
+U+FE41  ﹁  PRESENTATION FORM FOR VERTICAL LEFT CORNER BRACKET
+U+FE42  ﹂  PRESENTATION FORM FOR VERTICAL RIGHT CORNER BRACKET
+U+FE43  ﹃  PRESENTATION FORM FOR VERTICAL LEFT WHITE CORNER BRACKET
+U+FE44  ﹄  PRESENTATION FORM FOR VERTICAL RIGHT WHITE CORNER BRACKET
+U+FF02  ＂  FULLWIDTH QUOTATION MARK
+U+FF07  ＇  FULLWIDTH APOSTROPHE
+U+FF62  ｢   HALFWIDTH LEFT CORNER BRACKET
+U+FF63  ｣   HALFWIDTH RIGHT CORNER BRACKET
+
+### Commalike Character Definition
+
+A COMMALIKE CHARACTER is a comma (U+002C), or any other character in the following set: U+002C, U+02BB, U+02BC, U+02BD, U+060C, U+066B, U+201A, U+2E32, U+2E34, U+2E41, U+2E4C, U+3001, U+FE50, U+FE51, U+FF0C, U+FF64
+
+(Note: the only part of this that is currently theoretically necessary for parsing is `,` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+This list includes things that could be visually mistaken for a comma in order to avoid confusion by the reader.
+
+U+002C  ,   COMMA
+U+02BB  ʻ   MODIFIER LETTER TURNED COMMA
+U+02BC  ʼ   MODIFIER LETTER APOSTROPHE
+U+02BD  ʽ   MODIFIER LETTER REVERSED COMMA
+U+060C  ،   ARABIC COMMA
+U+066B  ٫   ARABIC DECIMAL SEPARATOR
+U+201A  ‚   SINGLE LOW-9 QUOTATION MARK
+U+2E32  ⸲   TURNED COMMA
+U+2E34  ⸴   RAISED COMMA
+U+2E41  ⹁   REVERSED COMMA
+U+2E4C  ⹌   MEDIEVAL COMMA
+U+3001  、   IDEOGRAPHIC COMMA
+U+FE50  ﹐   SMALL COMMA
+U+FE51  ﹑   SMALL IDEOGRAPHIC COMMA
+U+FF0C  ，   FULLWIDTH COMMA
+U+FF64  ､   HALFWIDTH IDEOGRAPHIC COMMA
+
+
+### Colonlike Character Definition
+
+A COLONLIKE CHARACTER is a colon (U+003A), or any other character in the following set: U+003A, U+02D0, U+02F8, U+0589, U+05C3, U+0703, U+0704, U+0903, U+0A83, U+0C03, U+0C83, U+0D03, U+16EC, U+205A, U+2236, U+2982, U+A789, U+FE13, U+FE30, U+FF1A
+
+(Note: the only part of this that is currently theoretically important for parsing is `:` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+This list includes things that could be visually mistaken for a colon in order to avoid confusion by the reader.
+
+U+003A  :   COLON
+U+02D0  ː   MODIFIER LETTER TRIANGULAR COLON
+U+02F8  ˸   MODIFIER LETTER RAISED COLON
+U+0589  ։   ARMENIAN FULL STOP
+U+05C3  ׃   HEBREW PUNCTUATION SOF PASUQ
+U+0703  ܃   SYRIAC SUPRALINEAR COLON
+U+0704  ܄   SYRIAC SUBLINEAR COLON
+U+0903  ः   DEVANAGARI SIGN VISARGA
+U+0A83  ઃ   GUJARATI SIGN VISARGA
+U+0C03  ః   TELUGU SIGN VISARGA
+U+0C83  ಃ   KANNADA SIGN VISARGA
+U+0D03  ഃ   MALAYALAM SIGN VISARGA
+U+16EC  ᛬   RUNIC MULTIPLE PUNCTUATION
+U+205A  ⁚   TWO DOT PUNCTUATION
+U+2236  ∶   RATIO
+U+2982  ⦂   Z NOTATION TYPE COLON
+U+A789  ꞉   MODIFIER LETTER COLON
+U+FE13  ︓   PRESENTATION FORM FOR VERTICAL COLON
+U+FE30  ︰   PRESENTATION FORM FOR VERTICAL TWO DOT LEADER
+U+FF1A  ：   FULLWIDTH COLON
+
+### Underscorelike Character Definition
+
+A UNDERSCORELIKE CHARACTER is a low line (U+005F), or any other character in the following set: U+005F, U+02CD, U+2581, U+23BC, U+23BD, U+FF3F
+
+(Note: the only part of this that is currently theoretically important for parsing is `_` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+The point of this is to avoid characters that look visually like an underscore to the point that the reader might mistake it for an underscore.
+
+U+005F  _   LOW LINE
+U+02CD  ˍ   MODIFIER LETTER LOW MACRON
+U+23BC  ⎼   HORIZONTAL SCAN LINE-7
+U+23BD  ⎽   HORIZONTAL SCAN LINE-9
+U+2581  ▁   LOWER ONE EIGHTH BLOCK
+U+FF3F  ＿  FULLWIDTH LOW LINE
+
+### Foreslashlike Character Definition
+
+A FORESLASHLIKE CHARACTER is a solidus (U+002F), or any other character in the following set: U+002F, U+1735, U+2044, U+2215, U+2571, U+29F8, U+FF0F
+
+(Note: the only part of this that is currently theoretically important for parsing is `/` itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+The point of this is to avoid characters that look visually like a foreslash, to the point that the reader might mistake it for a foreslash.
+
+U+002F  /   SOLIDUS
+U+1735  ᜵   PHILIPPINE SINGLE PUNCTUATION
+U+2044  ⁄   FRACTION SLASH
+U+2215  ∕   DIVISION SLASH
+U+2571  ╱   BOX DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT
+U+29F8  ⧸   BIG SOLIDUS
+U+FF0F  ／  FULLWIDTH SOLIDUS
 
 ---
 
@@ -1418,13 +1708,19 @@ MINIMAL JSON (JSON CONTAINING A NON-EMPTY OBJECT OR NON-EMPTY ARRAY WITH NO INTE
 
 This allows nonempty objects and non-empty arrays only as all simpler JSON values without extra whitespace are already also simple TJSON values already and require no additional restrictions or rules to support.  This section only applies to nonempty objects and arrays that the generator desires to present as MINIMAL JSON (strongly discouraged, but allowed).  MINIMAL JSON itself is a valid value within TJSON - MINIMAL means it contains no whitespace of any kind (aside from within double quoted strings of course in which case it is data), to include no real newline characters (real newline chars are not allowed in JSON anyway, so this is not an additional restriction).  Implementors should not actually generate MINIMAL JSON inside TJSON almost ever, but it is available as a last-ditch fallback if nothing else seems reasonable.
 
-MINIMAL JSON MUST NEVER be wrapped or folded, and MUST NEVER be packed in a TJSON line with any other value (not be packed in the sense of TJSON packing it with other items in the same object or array on the same line, it's required to be packed as far as no intermediate whitespace within the MINIMAL JSON itself) and can be detected with its opening `{[^} ]` or `[[^] ]` immediately after the indent level by the parser.  It ends at the end of the line, valid or not.  If it isn't valid, that's an error.  All the basic JSON values work as is, and objects and arrays can be placed in there in MINIMAL JSON format if necessary - but this is almost never a good idea.  All the simple JSON values (not nonempty object, not nonempty array) are also TJSON values, so no special provision needs to be made for those.
+MINIMAL JSON MUST NEVER be wrapped or folded.  Wrapped or folded MINIMAL JSON is a parse error.
+
+MINIMAL JSON MUST NEVER appear in a packed array format.  MINIMAL JSON in any packed array format is a parse error.
+
+MINIMAL JSON also SHOULD NOT be packed by a GENERATOR (to include a re-formatter) in a TJSON line with any other value (not be packed in the sense of TJSON packing it with other items in the same object or array on the same line, it's required to be packed as far as no intermediate whitespace within the MINIMAL JSON itself) and can be detected with its opening `{[^} ]` or `[[^] ]` by the parser.  It ends at the first nondata whitespace character within the MINIMAL JSON, even if that makes it invalid.  If it isn't valid, that's a parse error.  All the basic JSON values work as is, and objects and arrays can be placed in there in MINIMAL JSON format if necessary - but this is almost never a good idea.  All the simple JSON values (not nonempty object, not nonempty array) are also TJSON values, so no special provision needs to be made for those.  A parser should allow MINIMAL JSON in packed kv pairs as described above and within tables (a directly analogous situation, MINIMAL JSON as a key in an object).  A parser should not allow MINIMAL JSON in packed array lines.  The reason that parsers must allow some of this and generators should not is to enable humans to hand edit without having to unpack lines or turn tables into a different format even though the result is ugly (but deterministically parsable!) and to enable extremely special case generators to generate it if it actually looks good or is otherwise a good idea for that use case.  This is almost always going to be a bad idea and a general case TJSON generator should not ever do this without some special option ordering it to do so.  The issues are that 1) it's hard to read and 2) it can look ambiguous.  Therefore, even if it parses under this specification, a generator should never output packed MINIMAL JSON without specific direction, either from a user option, or by the user choosing to use some extremely niche special case generator.  A packed array is easy for a human to hand split if they need to stuff some minimal json in on a line.  The human is guaranteed that if one half of the array is packable, the other one is too.  Packed arrays are type constrained by rule, as they are inherently more prone to ambiguity due to the smaller spacing involved, which would affect a human editor too.  Another reason for making an attempt to stick MINIMAL JSON in a packed array a parse error, is that it would otherwise look a bit like comma packed arrays.  We do not want to lose parse errors that might be highly informative to the hand editor in that context.
+
+(Implementor's note: If you are highlighting or feeding MINIMAL JSON to an external JSON parser, it's easy to find a potential ending of valid minimal json via finding a whitespace character with 0 double quote parity while walking the string and not counting escaped \" while switching the parity bit if you are avoiding a full JSON parse, but this is solely an implementation note not a part of the spec and you can do it however you like as long as you do not turn a parse failure into a parse success.   We are erroring out completely rather than attempting to continue to parse if it fails so the exact manner in which you resolve this should not ever create a parse success where it otherwise would have failed.)
 
 MINIMAL JSON is generally going to look better if it's broken out at an array boundary, because if it's broken out at an object boundary our only choice is to stuff it onto the same line as its parent key to avoid array ambiguity.
 
 While producing TJSON containing MINIMAL JSON is strongly discouraged, it might be the least bad option for some implementations in some situations.  An example might be a single string within a 500 deep nested single element array or something similarly bizarre.  That's going to look like garbage no matter what you do, and TJSON containing MINIMAL JSON might be the best answer in some cases.
 
-MINIMAL JSON must be on a line by itself (aside from the indent and the `[` or `{` indent marks that sometimes go within the indent), it must have zero non-data whitespace, (that's why it's called MINIMAL JSON) - and it always ends at the end of the line - nothing may come after it on that line and it must have the line to itself other than the indent and any indent marks before it.
+MINIMAL JSON SHOULD be on a line by itself (aside from the indent and the `[` or `{` indent marks that sometimes go within the indent), it must have zero non-data whitespace, (that's why it's called MINIMAL JSON) - and, except for kv/table packing in order to facilitate hand edits and niche generators described above, it always ends at the end of the line - nothing may come after it on that line and it must have the line to itself other than the indent and any indent marks before it.
 
 As a special exception we allow a non folded bare or quoted key immediately before the MINIMAL JSON on its same line.  This is even more strongly discouraged than MINIMAL JSON, but the only way to do non-root level MINIMAL JSON that does not have an array level to break on.
 
@@ -1775,6 +2071,18 @@ k:5
                      />
                      />
 ```
+
+INFERRING INDENT MARKERS PAST DEFAULT BEHAVIOR (DON'T DO THIS!):
+
+I'm not putting this in here so much because this is a good idea, but because invitably someone will THINK its a good idea (and it might be for certain rare hand editing cases with a local, non-default, and explicit parser option, even though it violates the spec) and I want them to do it in a way that will not break the core principles of TJSON.  If you are going to infer (FORBIDDEN!) indent markers beyond the extent in the specification where we normally skip them for one level steps, depth always wins and is never inferred under any circumstances, and we never fail to honor an indent marker at a certain line at a certain depth, or reinterpret an indent marker or anything else to be at a different depth or on a different line even if it's only off by one.
+
+An array or object can never have more than one indent marker.  An indent marker starts an array or object (though it can be omitted if there's only one array or object starting on that line as it's obvious in that case only), and is often necessary to maintain parse certainty even when we aren't going up a level.  This is why the parser doesn't demand an indent marker for a single level, as it is obvious what is meant and it ends up being meaningless visual noise to most readers.
+
+With just one nonempty array or object being created on that line, there's no uncertainty, which is why the default generator behavior is not to show an indent marker on those lines without some sort of force marker option being set.  This is part of the reason why inferring them beyond this is inherently hazardous and misleading to the reader.  Fewer wrapper objects+arrays is the prefered interpretation, but not if it violates any of the above.
+
+If you are going to try to fill something in (not within this specification), DEPTH MUST ALWAYS WIN.  It doesn't matter what the indent markers say before it on a line, if its at depth n, its at depth n in the outgoing data, and it starts an object or array on that line.  No exceptions (reindent glyphs are the sole thing that can change this, but we are still honoring the depth over everything else even if it's modified by the indent marker context).  Reindent glyphs are a necessary evil to deal with finite rectangular screens, sadly.
+
+Even following the above, actually implementing inference past what the default behavior does in a way that doesnt break everything else is theoretically possible but unreasonably difficult, and doing it wrong will cause collateral damage.  Also, it would likely surprise the user even if it were implemented perfectly.  Don't do it.
 
 MOTIVATIONS AND TRADEOFFS REGARDING INDENT LEVEL ADJUSTMENT GLYPHS:
 
