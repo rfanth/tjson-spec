@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.5.1
+# Text Json (TJSON) Specification v0.5.2
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -201,6 +201,69 @@ Number any valid JSON number (0, 0.1, -5, 1e-3, -5e10 are all good), note that t
 
 Comments (this is the ONLY way to express comments):
 Comments are allowed, they must start with a `//` and be on their own line.  A comment cannot be within a MULTILINE STRING to include its starting and ending glyphs.  A comment may not be within a fold.  Comments are allowed to have any number, or 0 spaces before the `//`.  Anything after the `//` is ignored until we hit an EOL character.  Comments do not need to respect the indent level, and they do not affect the indent level irrespective of how many spaces they do or do not have before.  Comments at the end of lines containing anything else are not allowed.  There is no other form of comment.  A comment of course can never round trip with JSON, and will probably rarely get used as this is a read almost always format, written almost exclusively by computers, but they are allowed.  It made sense to exclude them from the first character of bare strings and bare keys anyway as they looked like comments, so we might as well make them actual comments if we have to reserve `/` anyway.
+
+#### Adjacent Comment Indentation Rule
+
+There is a special rule to preserve comment adjacency and line order after rerendering the same data, and that is that for any two adjacent comments, the second one cannot have a lower indent than the comment immediately before it.
+
+TJSON is inherently spatial by design, and it makes sense that people who want to comment a particular thing where there is more than one thing on a line would put it adjacent spatially at a visibly similar indent level.  Parsers that preserve comments may make the same coupling also.  This is something we want to preserve, but we never want it to conflict with document line order.
+
+If the comment indent went down from one line to the next, it could indicate a correspondence with data that was in the opposite direction of the lines in the file.  If the comments were associated with data in the file by a parser, and the data on the line moved during a rerender, it's possible that for the comment to stay with the data it appeared to be associated with, the line order in the file would have to invert.  In order to stop any parser from ever having to do this, we simply parse error whenever consecutive comment lines have a lower indent than the comment immediately before.  This does not necessarily mean that comment lines need to have any particular relation with other comment lines as to indent level, or any relation with the data indent level.  They could.  A parser might reasonably assume that.  But it isn't required.  It also imposes no constraint whatsoever on comment lines that are not immediately adjacent.  It imposes no restriction on the range of comment indent allowed levels, a comment may have any indent level at all irrespective of what data it is near, or what other data is in the same file.  This is a very narrow restriction that applies only to adjacent lines.  This restriction has nothing to do with anything that goes after the `//`.
+
+Here's an example of why this rule matters to a spatial format like TJSON.
+
+```json
+[[[["bare string"]]]]
+```
+
+*Bad Example* (parse error)
+```tjson
+// this is a comment about the outer array (1)
+  // this is a comment about the next array level (2)
+// this is another comment about the outer array (3)
+      // this is a comment about the innermost array level (4)
+[ [ [ [  bare string
+```
+
+*Good Example*
+```tjson
+// this is a comment about the outer array (1)
+// this is another comment about the outer array (2)
+  // this is a comment about the next array level (3)
+      // this is a comment about the innermost array level (4)
+[ [ [ [  bare string
+```
+*Valid Example* (For if you stylistically want the declining indent but don't want a parse error)
+```tjson
+//       The parser
+//                        doesn't care
+//   what you type after the '//'
+// at all.
+//
+// The parser doesn't care what comes after the //, it only looks at the indent before it.
+                                                                 // this comment is fine, it's at the same or more indented, even though it's well past the data.
+[ [ [ [  bare string
+                                         // this comment is fine too, it's not adjacent to the other comments, so it can be anywhere.
+         another bare string inserted after bare string
+```
+
+If we didn't parse error on the first one, a smart document parser that preserves comments would have to do this when you inserted data, which is a reordering that might be surprising to the reader.  If it didn't do that, it would lose the data pairing just because information was added.  Not every parser has to data pair comment lines spatially like this, but a parser shouldn't have to choose between spatial data association and losing line order of adjacent comments.  In order to avoid this potential, we simply reject adjacent comments that lose indent when we parse.
+
+*Example: What would happen if we inserted stuff in the bad example above and didn't have this rule*
+```tjson
+// this is a comment about the outer array (1)
+// this is another comment about the outer array (3) NOW OUT OF ORDER!
+[  inserted in outer array
+  // this is a comment about the next array level (2)
+  [  inserted in next array level
+      // this is a comment about the innermost array level (4)
+    [ [  bare string
+```
+
+A parser isn't required to be this smart.  It would still be a parser (though perhaps not as good) if it simply associated the commented line with the first thing on the next line and treated adjacent comment lines as if they were all at the same indent even when the indent is increasing.  It would probably be worse, but it would still be a valid TJSON parser.  But even if it's dumber, it shouldn't have to decide between data correspondence and reordering lines.
+
+It's also important that this rule be easy to apply for a relatively dumb parser, which is why we apply it even if we wouldn't otherwise reorder the lines.  Maybe two comments are so close that even if you were associating them with data, it would be the same data, maybe it's only one column.  That shouldn't matter.  It's always simple: if the number of spaces in the indent decreases over two consecutive comment lines, it's a parse error.
+
 
 ---
 
