@@ -1,4 +1,4 @@
-# Text Json (TJSON) Specification v0.5.0
+# Text Json (TJSON) Specification v0.5.1
 
 Created by R.F. Anthracite rfa@rfanth.com
 
@@ -184,9 +184,9 @@ TJSON is case sensitive.  For example, 'True', 'False', and 'NULL' are parse err
 
 ### Treatment of String Representation of Basic Types: ("true" "false" "null" '""' "[]" and "{}")
 
-"true" "false" "null" "[]" and "{}" are allowed as BARE STRINGS by default, and in principle are allowed as BARE KEYS (but bare key rules forbid "", "[]", and "{}" already, independent of their status as BASIC TYPES, so these are not possible, and BARE STRINGS already forbid "" as it both starts and ends with a quotelike).
+"true" "false" and "null" are allowed as BARE STRINGS by default, and in principle are allowed as BARE KEYS (but bare key rules forbid "", "[]", and "{}" already, independent of their status as BASIC TYPES, so these are not possible, and BARE STRINGS already forbid "" as it both starts and ends with a quotelike, "[]" as it starts or ends with a SQUAREBRACKETLIKE, and "{}" as it starts or ends with a CURLYBRACKETLIKE).
 
-Implementors may choose as an option or consistent with their particular use case to force double quotes around some strings.  Strings that are the exact string representation of a BASIC TYPE ("true" "false" "null" "[]" and "{}") are and should be allowed BARE STRINGS by default, but an implementor might force these particular strings only to be double quoted, or even forbid bare strings entirely (strongly discouraged, definitely not a good idea by default, BARE STRINGS are preferred).  An implementor might forbid the string version of some or all of the BASIC TYPES above ("null", "true", "false", "[]", "{}") from being bare strings in tables (not the default).  Such strings must be parsable anywhere as bare strings, including in tables.  The spec intentionally does not force the strings null, true, false, {}, and [] to be double quoted JSON type strings rather than bare strings unless the user explicitly chooses that option.
+Implementors may choose as an option or consistent with their particular use case to force double quotes around some strings.  Strings that are the exact string representation of a BASIC TYPE ("true" "false" "null") are and should be allowed BARE STRINGS by default, but an implementor might force these particular strings only to be double quoted, or even forbid bare strings entirely (strongly discouraged, definitely not a good idea by default, BARE STRINGS are preferred).  An implementor might forbid the string version of some or all of the BASIC TYPES above ("null", "true", "false") from being bare strings in tables (not the default).  Such strings must be parsable anywhere as bare strings, including in tables.  The spec intentionally does not force the strings null, true, false, {}, and [] to be double quoted JSON type strings rather than bare strings unless the user explicitly chooses that option.
 
 If your generator actually uses MINIMAL JSON as more than as a last ditch effort, that generator should probably have different rules for when to use a bare key than the default generator.  If a generator actually uses MINIMAL JSON more than in extremis, for stuff like `  barekey:["minimal","json"]`, the generator should limit the usage of bare strings for visual analogs, by forcing double quotes on anything that starts or ends with square brackets or curly braces, and any close unicode analogs that might mislead a reader.
 
@@ -242,9 +242,37 @@ Strings can have a variety of formats and this is intentional.  The default favo
 
 ### Bare Strings
 
-A BARE STRING cannot start or end with space, and cannot have whitespace at all other than non-consecutive regular spaces internally.  No space space allowed, multiple spaces are fine as long as they aren't at the ends and aren't next to each other.  A BARE STRING also cannot start or end with QUOTELIKE CHARACTERS of any kind, to include backtick (U+0060), see definition of QUOTELIKE CHARACTERS), and cannot start or end with COMMALIKE CHARACTERS (`[,\uFF0C\uFE50...]` — this includes ASCII comma U+002C, fullwidth comma U+FF0C, small comma U+FE50, and others, see COMMALIKE CHARACTERS).  This is to avoid the user thinking something is quoted or in an inline array when it isn't.  A BARE STRING also cannot start with a `/` or FORESLASHLIKE CHARACTER, to avoid looking like a comment or a fold marker when it is not. A BARE STRING cannot start with a underscore or UNDERSCORELIKE CHARACTER to avoid looking like a `_`, which can be used at the beginning of a bare string in lieu of a space when you want to be extra literal, but the generator will not produce it by default.  A BARE STRING also cannot start or end with a `|` pipe or PIPELIKE CHARACTER, to avoid it looking like the edge of a table line or a MULTILINE STRING when it is not.  Implementations may want more exclusions than these, they are not required to represent anything as a bare string, but they do need to be able to parse it.  The whole reason we have bare strings is to make them readable.  Except for our regular space (U+0020) rules above, control characters, invisible characters, composed characters (the problem there is not that they are composed, but that when you see a character in a bare string you can't even theoretically know its unicode representation anymore by looking at it, by restricting it to the single character only representation, now we can at least theoretically know) and other weird characters are forbidden (`[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`).  We intentionally allow emojis with exactly one bare string representation, this is not a mistake.  It's ok for programs that create TJSON to be more strict than this even by default (it's pretty generous, deterministic emojis for example) and fall back to a JSON string with some of the characters allowed by this rule, but they can't be less strict.  Unfortunately, excluding `\p{M}` does exclude certain languages, but without the exclusion the risk of hiding data is too great.
+A BARE STRING cannot start or end with space, and cannot have whitespace at all other than non-consecutive regular spaces internally.  No space space allowed, multiple spaces are fine as long as they aren't at the ends and aren't next to each other.
 
-If a particular user spoke Tamil or Arabic and was willing to accept the risk internally, they might write their own generator option that allows some of this anyway, and may want to have their own nonconforming local parser option that is looser than the spec, but don't do this with any TJSON you aren't planning to consume exclusively locally, as it is not compliant.  However, the limitations on ["/:,|`] in bare strings and bare keys, and any of the regular space rules, should be a parse error even with some special case local only nonconforming parse/ingest toolchain as they are parse-critical.
+A BARE STRING also cannot start or end with QUOTELIKE CHARACTERS of any kind, to include backtick (U+0060), see definition of QUOTELIKE CHARACTERS), and cannot start or end with COMMALIKE CHARACTERS (`[,\uFF0C\uFE50...]` — this includes ASCII comma U+002C, fullwidth comma U+FF0C, small comma U+FE50, and others, see COMMALIKE CHARACTERS).  This is to avoid the user thinking something is quoted or in an inline array when it isn't.
+A BARE STRING also cannot start with a `/` or FORESLASHLIKE CHARACTER, to avoid looking like a comment or a fold marker when it is not. A BARE STRING cannot start with a underscore or UNDERSCORELIKE CHARACTER to avoid looking like a `_`, which can be used at the beginning of a bare string in lieu of a space when you want to be extra literal, but the generator will not produce it by default.  A BARE STRING also cannot start or end with a `|` pipe or PIPELIKE CHARACTER, to avoid it looking like the edge of a table line or a MULTILINE STRING when it is not.  For similar reasons, a bare string is not allowed to start or end with a `[` `]`, `{` `}` or analogs SQUAREBRACKETLIKE CHARACTERS and CURLYBRACKETLIKE CHARACTERS, and the limitation is not sided, in that neither side of a square bracket or curly brace can appear at the beginning, and neither side of a square bracket or curly brace can appear at the end.  The point of this is to avoid confusing the reader, who might otherwise think it is an indent marker, coupled with an indent marker, or part of MINIMAL JSON when it is not.  This also happens to exclude the empty array and object, though that is not the primary reason for the exclusion.
+
+Implementations may want more exclusions than these, they are not required to represent anything as a bare string, but they do need to be able to parse it.  The whole reason we have bare strings is to make them readable.  Except for our regular space (U+0020) rules above, control characters, invisible characters, composed characters (the problem there is not that they are composed, but that when you see a character in a bare string you can't even theoretically know its unicode representation anymore by looking at it, by restricting it to the single character only representation, now we can at least theoretically know) and other weird characters are forbidden (`[\p{C}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}]`).  We intentionally allow emojis with exactly one bare string representation, this is not a mistake.  It's ok for programs that create TJSON to be more strict than this even by default (it's pretty generous, deterministic emojis for example) and fall back to a JSON string with some of the characters allowed by this rule, but they can't be less strict.  Unfortunately, excluding `\p{M}` does exclude certain languages, but without the exclusion the risk of hiding data is too great.
+
+#### Enumerated list of certain disallowed ASCII characters at the ends described above (not including space)
+This list does not expand or contract the rules, it's just a convenient enumeration of some of them.  It's not exhaustive, but it's an easy way to keep the starting and ending rules straight.
+
+BARE STRING START ONLY DISALLOWED CHARACTERS:
+ASCII:
+`_`
+`/`
+NON-ASCII UNICODE: analogs of above, see UNDERSCORELIKE/FORESLASHLIKE
+
+BARE STRING START AND END DISALLOWED CHARACTERS:
+These are all meaningful structural characters:
+ASCII:
+`,`
+`` ` ``
+`"`
+`'`
+`|`
+`[` (both sides, in any direction, corresponding or not)
+`]` (both sides, in any direction, corresponding or not)
+`{` (both sides, in any direction, corresponding or not)
+`}` (both sides, in any direction, corresponding or not)
+NON-ASCII UNICODE: analogs of above, see PIPELIKE/QUOTELIKE/COMMALIKE/SQUAREBRACKETLIKE/CURLYBRACKETLIKE
+
+If a particular user spoke Tamil or Arabic and was willing to accept the risk internally, they might write their own generator option that allows some of this anyway, and may want to have their own nonconforming local parser option that is looser than the spec, but don't do this with any TJSON you aren't planning to consume exclusively locally, as it is not compliant.  However, the limitations on [[]{}"/:,|`] in bare strings and bare keys, and any of the regular space rules, should be a parse error even with some special case local only nonconforming parse/ingest toolchain as they are parse-critical.
 
 Parsers are allowed to have a strict mode that rejects any unescaped character that is not allowed to be produced by the spec, and for a parser that only works in a certain context, a parser might choose to reject those characters entirely.  (A high security context for instance.)  If a parser chooses to do this by default it should inform the user if practicable that it is parsing in strict mode or similar by default.  A parser might also choose to add security features and refuse to ingest certain things entirely escaped or otherwise, but that is not specification compliant, and should probably be done at the data layer rather than in the parser itself, at least logically, as it's doing two things, being a TJSON parser, and a security layer, not just being a TJSON parser.
 
@@ -1289,7 +1317,7 @@ Padding: each cell is padded with spaces on the RIGHT only, minimum 2 spaces of 
 
 An absent cell (key not present in that object) is represented by an empty cell - just padding spaces between the `|` separators, or no space at all between the two separators.  An explicit empty string value is represented as `""` just like it is everywhere else in TJSON.
 
-Uneven and ugly padding is not desirable, and generators should mostly not produce tables if a reasonable looking table cannot be produced, but parsers must accept ugly and uneven padding too as long as it complies with the rules.  Our examples generally have very nice perfectly even padding, but nice padding is not required for parse validity.  Padding does not have to be consistent from row to row or column to column to be valid.
+Uneven and ugly padding is not desirable, and generators should mostly not produce tables if a reasonable looking table cannot be produced, but parsers must accept ugly and uneven padding too as long as it complies with the rules.  Our examples generally have very nice perfectly even padding, but nice padding is not required for parse validity.  Padding does not have to be consistent from row to row or column to column to be valid.  The two space minimum on the right side after a value is required, but not every cell will necessarily contain a value, and a cell without a value can go as low as zero width and still parse.
 
 **Example:** table format
 ```json
@@ -1492,7 +1520,7 @@ Note that the innermost object first data character above, the 'a' key, is in co
 
 ### Implementation Note — When to Use Table Format
 
-The parser must accept any valid table format regardless of how it was generated. The following is guidance for generators only.  Note that bare strings need exactly one space before, and two or more spaces afterward.  Other data types must start immediately at the left with no space, and may but are not required to have space afterward.  Bare strings should not be allowed to contain pipes or pipelike characters in a table by default.  Bare strings by default should not be used in a table if they are exactly the string version of one of our basic types ("true" "false", "null", "[]", or "{}").  If one of the strings in the table contains a pipe or pipelike character, that string must be a JSON STRING instead.  Implementations on platforms that simply do not have a basic type may choose to default to bare strings for those basic types as it is unlikely that the string "true" could be ambiguous in an environment that doesn't have a boolean data type at all.
+The parser must accept any valid table format regardless of how it was generated. The following is guidance for generators only.  Note that bare strings need exactly one space before, and two or more spaces afterward.  Other data types must start immediately at the left with no space, and may but are not required to have space afterward.  Bare strings should not be allowed to contain pipes or pipelike characters in a table by default.  Bare strings by default should not be used in a table if they are exactly the string version of one of our basic types: "true", "false", or "null".  "[]" and "{}" are already illegal as bare strings generally.  If one of the strings in the table contains a pipe or pipelike character, that string must be a JSON STRING instead.  Implementations on platforms that simply do not have a basic type may choose to default to bare strings for those basic types as it is unlikely that the string "true" could be ambiguous in an environment that doesn't have a boolean data type at all.
 
 ### Default Algorithm for Deciding Whether to Use Table Format
 
@@ -1510,6 +1538,7 @@ If all three are met, use table format. Otherwise use regular array of objects f
 - If total table width fits within table column max width (default 40 characters per column), use ideal widths
 - If not, distribute available space to columns that are below the average width, pushing toward equal widths, left to right. Columns already at or above the average get minimum 2 spaces only.
 - Never truncate any value. A cell wider than table column max width just makes a wider column — it simply receives no bonus padding from the equalization pass.
+- Width here is meant to optimize around human visibility, generators can make their own decisions, but those decisions on what a width is should at least look toward approximating visible width first.  This document is written in ascii where one byte = one character and all characters are the same size as we are using a monospace font.  In a lot of situations, TJSON might be written with a non-monospace font for all sorts of reasons, perhaps embedding it in another document, and perhaps in a font unforseeable by the generator.  A generator might keep one character = 1 width to stay simple, but it might also have a much more complex algorithm resulting in a better visual approximation for the characters used and the expected font.  A generator can have a better default algorithm than this one, it wouldn't be a violation of the specification, this should be seen as a reasonable default monospace width algorithm where each character takes exactly one space, that implementors can derive visual priority from.
 
 ### Pipelike Character Definition
 
@@ -1570,7 +1599,7 @@ A QUOTELIKE CHARACTER is a backtick (U+0060), a double quote (U+0022), single qu
 
 If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
 
-This includes not only things that might look like a double quote, but things that might be interpreted like a quote to the reader in a meaning sense, if not a visual one.  This is broader than some of these other definitions intentionally.
+This includes not only things that might look like a double quote, but things that might be interpreted like a quote to the reader in a meaning sense, if not a visual one.  This is broader than these other definitions intentionally.
 
 U+0022  "   QUOTATION MARK
 U+0027  '   APOSTROPHE
@@ -1697,6 +1726,52 @@ U+2215  ∕   DIVISION SLASH
 U+2571  ╱   BOX DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT
 U+29F8  ⧸   BIG SOLIDUS
 U+FF0F  ／  FULLWIDTH SOLIDUS
+
+### Squarebracketlike Character Definition
+
+A SQUAREBRACKETLIKE CHARACTER is a left square bracket (U+005B), a right square bracket (U+005D), or any other character in the following set: U+005B, U+005D, U+2772, U+2773, U+27E6, U+27E7, U+298B, U+298C, U+3010, U+3011, U+301A, U+301B, U+FF3B, U+FF3D
+
+(Note: the only part of these that are currently theoretically important for parsing is [ and ] itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+The point of this is to avoid characters that look visually like a square bracket, to the point that the reader might mistake it for the `[ ` marker that marks an array level, the [] that spells an empty array, or the start or end of MINIMAL JSON.
+
+This definition is not sided.  A definition that forbids this type of characters on both sides is forbidding both left and right both sides, not just when they are pointing in, or out, or in consistent or inconsistent directions.
+
+U+005B  [   LEFT SQUARE BRACKET
+U+005D  ]   RIGHT SQUARE BRACKET
+U+2772  ❲   LIGHT LEFT TORTOISE SHELL BRACKET ORNAMENT
+U+2773  ❳   LIGHT RIGHT TORTOISE SHELL BRACKET ORNAMENT
+U+27E6  ⟦   MATHEMATICAL LEFT WHITE SQUARE BRACKET
+U+27E7  ⟧   MATHEMATICAL RIGHT WHITE SQUARE BRACKET
+U+298B  ⦋   LEFT SQUARE BRACKET WITH UNDERBAR
+U+298C  ⦌   RIGHT SQUARE BRACKET WITH UNDERBAR
+U+3010  【  LEFT BLACK LENTICULAR BRACKET
+U+3011  】  RIGHT BLACK LENTICULAR BRACKET
+U+301A  〚  LEFT WHITE SQUARE BRACKET
+U+301B  〛  RIGHT WHITE SQUARE BRACKET
+U+FF3B  ［  FULLWIDTH LEFT SQUARE BRACKET
+U+FF3D  ］  FULLWIDTH RIGHT SQUARE BRACKET
+
+### Curlybracketlike Character Definition
+
+A CURLYBRACKETLIKE CHARACTER is a left curly bracket (U+007B), a right curly bracket (U+007D), or any other character in the following set: U+007B, U+007D, U+2774, U+2775, U+FF5B, U+FF5D
+
+(Note: the only part of these that are currently theoretically important for parsing is { and } itself, but these avoid confusion, and preserve room for future expansion.)
+
+If an implementor thinks something is visually confusing, they should absolutely use double quoting or other special treatment for greater clarity whether it's in this list or not.  This is just a limitation on what we parse.
+
+The point of this is to avoid characters that look visually like a curly bracket, to the point that the reader might mistake it for the `{ ` marker that marks an object level, the {} that spells an empty object, or the start or end of MINIMAL JSON.
+
+This definition is not sided.  A definition that forbids this type of characters on both sides is forbidding both left and right both sides, not just when they are pointing in, or out, or in consistent or inconsistent directions.
+
+U+007B  {   LEFT CURLY BRACKET
+U+007D  }   RIGHT CURLY BRACKET
+U+2774  ❴   MEDIUM LEFT CURLY BRACKET ORNAMENT
+U+2775  ❵   MEDIUM RIGHT CURLY BRACKET ORNAMENT
+U+FF5B  ｛  FULLWIDTH LEFT CURLY BRACKET
+U+FF5D  ｝  FULLWIDTH RIGHT CURLY BRACKET
 
 ---
 
